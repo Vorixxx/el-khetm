@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#ffffff"/>
+  <!-- Polite silver-haired bearded elder Hide-the-Pain holding Egyptian tea -->
+  <path d="M44 244 C46 192 82 174 128 174 C174 174 210 192 212 244 Z" fill="#3B82F6" stroke="#1E293B" stroke-width="6"/>
+  <circle cx="128" cy="112" r="62" fill="#FDE6C4" stroke="#1E293B" stroke-width="6"/>
+  <!-- Grey hair & beard -->
+  <path d="M68 96 C66 50 104 34 134 36 C168 38 192 60 188 98 C174 72 150 64 128 66 C102 68 80 78 68 96 Z" fill="#94A3B8" stroke="#1E293B" stroke-width="5"/>
+  <path d="M74 130 C76 172 102 186 128 186 C154 186 180 172 182 130 C170 144 152 150 128 150 C104 150 86 144 74 130 Z" fill="#CBD5E1" stroke="#1E293B" stroke-width="5"/>
+  <!-- Worried/pained eyes & forced tight smile -->
+  <path d="M90 92 Q105 84 114 94" fill="none" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M166 92 Q151 84 142 94" fill="none" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="104" cy="108" rx="9" ry="7" fill="#FFFFFF" stroke="#1E293B" stroke-width="3"/>
+  <circle cx="104" cy="109" r="4" fill="#1E293B"/>
+  <ellipse cx="152" cy="108" rx="9" ry="7" fill="#FFFFFF" stroke="#1E293B" stroke-width="3"/>
+  <circle cx="152" cy="109" r="4" fill="#1E293B"/>
+  <!-- Sweating drop -->
+  <path d="M174 78 C184 90 184 102 174 102 C164 102 164 90 174 78 Z" fill="#38BDF8" stroke="#1E293B" stroke-width="3"/>
+  <!-- Forced grimacing smile -->
+  <path d="M100 140 Q128 156 156 140 Q128 164 100 140 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="4"/>
+  <!-- Glass of hot tea held awkwardly -->
+  <polygon points="164,174 206,174 198,232 172,232" fill="#E0F2FE" stroke="#1E293B" stroke-width="4.5" stroke-linejoin="round"/>
+  <polygon points="168,192 202,192 197,228 173,228" fill="#B91C1C"/>
+  <path d="M178 166 Q172 152 180 142 M194 166 Q188 152 196 142" fill="none" stroke="#94A3B8" stroke-width="3" stroke-linecap="round"/>
+</svg>

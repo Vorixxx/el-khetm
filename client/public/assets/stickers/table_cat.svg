@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#ffffff"/>
+  <path d="M50 185 C42 135 58 76 90 68 L104 40 L122 65 Q138 62 154 66 L172 38 L184 70 C212 85 218 140 205 186 Z" fill="#F8FAFC" stroke="#1E293B" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M92 66 L104 45 L116 64 Z" fill="#FDA4AF" stroke="#1E293B" stroke-width="3"/>
+  <path d="M160 65 L170 43 L179 67 Z" fill="#FDA4AF" stroke="#1E293B" stroke-width="3"/>
+  <!-- Squinting offended eyes -->
+  <path d="M84 108 L116 113 L86 118 Z" fill="#1E293B"/>
+  <path d="M174 107 L142 113 L172 118 Z" fill="#1E293B"/>
+  <circle cx="101" cy="113" r="3" fill="#FBBF24"/>
+  <circle cx="157" cy="113" r="3" fill="#FBBF24"/>
+  <!-- Cute pink nose and grumpy cat mouth -->
+  <polygon points="122,126 136,126 129,134" fill="#FB7185" stroke="#1E293B" stroke-width="3"/>
+  <path d="M129 134 Q120 144 111 140 M129 134 Q138 144 147 140" fill="none" stroke="#1E293B" stroke-width="4" stroke-linecap="round"/>
+  <!-- Whiskers -->
+  <path d="M44 122 L80 128 M40 135 L78 135 M46 149 L80 143" stroke="#1E293B" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M214 122 L178 128 M218 135 L180 135 M212 149 L178 143" stroke="#1E293B" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Salad plate in foreground -->
+  <ellipse cx="128" cy="202" rx="82" ry="26" fill="#E2E8F0" stroke="#1E293B" stroke-width="5"/>
+  <ellipse cx="128" cy="197" rx="58" ry="16" fill="#86EFAC" stroke="#1E293B" stroke-width="3"/>
+  <circle cx="108" cy="194" r="7" fill="#EF4444" stroke="#1E293B" stroke-width="2.5"/>
+  <circle cx="145" cy="196" r="7" fill="#EF4444" stroke="#1E293B" stroke-width="2.5"/>
+  <circle cx="126" cy="188" r="6" fill="#FACC15" stroke="#1E293B" stroke-width="2.5"/>
+</svg>

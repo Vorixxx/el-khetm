@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#ffffff"/>
+  <!-- Confident Gigachad cool boss with dark sunglasses -->
+  <path d="M46 244 C48 188 86 168 128 168 C170 168 208 188 210 244 Z" fill="#1E293B" stroke="#0F172A" stroke-width="6"/>
+  <path d="M84 64 L172 64 L176 132 L152 174 L104 174 L80 132 Z" fill="#E2A478" stroke="#1E293B" stroke-width="6" stroke-linejoin="round"/>
+  <!-- Styled thick pompadour hair & sharp beard -->
+  <path d="M74 88 C66 44 106 24 148 30 C182 34 190 60 180 88 C168 62 140 56 112 60 C92 64 82 76 74 88 Z" fill="#1E293B" stroke="#0F172A" stroke-width="4"/>
+  <path d="M82 126 L94 168 L128 182 L162 168 L174 126 L166 138 L152 160 L128 166 L104 160 L90 138 Z" fill="#334155" stroke="#1E293B" stroke-width="3"/>
+  <!-- Iconic Pixel Deal-With-It Sunglasses -->
+  <polygon points="74,94 182,94 182,110 166,110 166,118 134,118 134,104 122,104 122,118 90,118 90,110 74,110" fill="#0F172A" stroke="#1E293B" stroke-width="3"/>
+  <polygon points="88,99 102,99 96,105 88,105" fill="#FFFFFF"/>
+  <polygon points="140,99 154,99 148,105 140,105" fill="#FFFFFF"/>
+  <!-- Confident smirk -->
+  <path d="M110 144 Q134 154 150 138" fill="none" stroke="#1E293B" stroke-width="5" stroke-linecap="round"/>
+  <!-- Gold sparkles -->
+  <path d="M40 72 L46 56 L52 72 L68 78 L52 84 L46 100 L40 84 L24 78 Z" fill="#F59E0B" stroke="#1E293B" stroke-width="2.5"/>
+  <path d="M210 140 L214 128 L218 140 L230 144 L218 148 L214 160 L210 148 L198 144 Z" fill="#F59E0B" stroke="#1E293B" stroke-width="2.5"/>
+</svg>

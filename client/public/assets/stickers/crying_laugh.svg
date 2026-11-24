@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#ffffff"/>
+  <!-- Cute frog meme laughing hysterically -->
+  <ellipse cx="88" cy="72" rx="34" ry="30" fill="#65A30D" stroke="#1E293B" stroke-width="6"/>
+  <ellipse cx="168" cy="72" rx="34" ry="30" fill="#65A30D" stroke="#1E293B" stroke-width="6"/>
+  <ellipse cx="128" cy="136" rx="88" ry="72" fill="#84CC16" stroke="#1E293B" stroke-width="6"/>
+  <ellipse cx="128" cy="164" rx="64" ry="36" fill="#D9F99D"/>
+  <!-- Laughing tight squinted eyes -->
+  <path d="M68 74 L106 66 L76 88" fill="none" stroke="#1E293B" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M188 74 L150 66 L180 88" fill="none" stroke="#1E293B" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Giant crying tears -->
+  <path d="M62 84 C32 95 26 125 42 132 C56 138 68 112 68 92 Z" fill="#38BDF8" stroke="#1E293B" stroke-width="4.5"/>
+  <path d="M194 84 C224 95 230 125 214 132 C200 138 188 112 188 92 Z" fill="#38BDF8" stroke="#1E293B" stroke-width="4.5"/>
+  <!-- Giant wide-open laughing mouth -->
+  <path d="M66 126 Q128 114 190 126 C192 178 164 196 128 196 C92 196 64 178 66 126 Z" fill="#991B1B" stroke="#1E293B" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M74 128 L182 128 L176 144 Q128 150 80 144 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="3"/>
+  <ellipse cx="128" cy="182" rx="34" ry="14" fill="#FB7185" stroke="#1E293B" stroke-width="3"/>
+  <!-- Red laughing cheeks -->
+  <ellipse cx="64" cy="116" rx="14" ry="8" fill="#F87171" opacity="0.7"/>
+  <ellipse cx="192" cy="116" rx="14" ry="8" fill="#F87171" opacity="0.7"/>
+</svg>

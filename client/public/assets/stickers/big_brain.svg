@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#ffffff"/>
+  <!-- Clever thinking Roll Safe character tapping temple -->
+  <path d="M52 242 C52 192 84 172 124 172 C164 172 194 192 194 242 Z" fill="#334155" stroke="#1E293B" stroke-width="6"/>
+  <path d="M104 174 L124 210 L144 174" fill="#F8FAFC" stroke="#1E293B" stroke-width="4"/>
+  <!-- Head & Hair -->
+  <path d="M78 96 C78 52 170 52 170 96 L170 132 C170 164 148 182 124 182 C100 182 78 164 78 132 Z" fill="#C68642" stroke="#1E293B" stroke-width="6"/>
+  <path d="M74 96 C72 48 110 34 144 38 C176 42 180 72 174 96 C162 76 138 68 112 72 C92 75 82 86 74 96 Z" fill="#1E293B" stroke="#1E293B" stroke-width="4"/>
+  <!-- Clever raised eyebrow & wink -->
+  <path d="M90 100 Q106 88 118 98" fill="none" stroke="#1E293B" stroke-width="5" stroke-linecap="round"/>
+  <path d="M132 90 Q148 76 164 88" fill="none" stroke="#1E293B" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="105" cy="112" r="6" fill="#1E293B"/>
+  <ellipse cx="147" cy="112" rx="9" ry="7" fill="#FFFFFF" stroke="#1E293B" stroke-width="3"/>
+  <circle cx="147" cy="112" r="4" fill="#1E293B"/>
+  <!-- Smug grin + goatee -->
+  <path d="M102 146 Q126 164 152 142" fill="none" stroke="#1E293B" stroke-width="5" stroke-linecap="round"/>
+  <!-- Pointing hand tapping temple -->
+  <path d="M172 185 L206 132 C214 118 224 124 218 136 L194 176" fill="#C68642" stroke="#1E293B" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M205 124 L170 105 C163 102 167 92 176 96 L214 114 C222 118 222 132 212 138 L194 150 Z" fill="#C68642" stroke="#1E293B" stroke-width="5" stroke-linejoin="round"/>
+  <!-- Glowing brainwaves -->
+  <path d="M182 70 L204 54 M192 84 L220 78 M194 100 L218 106" stroke="#F59E0B" stroke-width="5" stroke-linecap="round"/>
+</svg>
