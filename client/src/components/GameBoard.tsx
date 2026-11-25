@@ -269,22 +269,22 @@ const SpotlightCardOverlay: React.FC = () => {
     <AnimatePresence>
       <motion.div
         key={spotlight.id}
-        initial={{ opacity: 0, scale: 0.55, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.65, y: -12 }}
-        transition={{ type: 'spring', stiffness: 360, damping: 22 }}
-        className="pointer-events-none absolute inset-x-0 top-[33%] z-30 flex flex-col items-center justify-center px-4"
+        initial={{ opacity: 0, y: -12, scale: 0.92 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -10, scale: 0.94 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+        className="pointer-events-none absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center px-3 w-full max-w-[300px]"
         dir="rtl"
       >
-        <div className="bg-ink/90 text-white rounded-2xl border-2 border-wasta-gold shadow-[0_12px_32px_rgba(0,0,0,0.45)] p-2.5 flex items-center gap-2.5 max-w-[290px]">
-          <CardComponent cardType={spotlight.cardType} size="xs" />
-          <div className="flex-1 min-w-0">
-            <p className="font-cairo font-black text-xs text-wasta-gold truncate">
+        <div className="bg-ink/92 backdrop-blur-sm text-white rounded-full border border-wasta-gold/80 shadow-[0_8px_22px_rgba(0,0,0,0.35)] px-3 py-1 flex items-center gap-2 max-w-full">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            <span className="font-cairo font-black text-[11px] text-wasta-gold whitespace-nowrap">
               {spotlight.headlineAr}
-            </p>
-            <p className="font-cairo font-bold text-[10.5px] text-white/90 leading-snug mt-0.5 line-clamp-2">
+            </span>
+            <span className="text-white/40 text-[10px]">•</span>
+            <span className="font-cairo font-bold text-[10px] text-white/90 truncate">
               {spotlight.subtitleAr}
-            </p>
+            </span>
           </div>
         </div>
       </motion.div>

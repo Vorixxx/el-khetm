@@ -51,7 +51,15 @@ const WaitingReactionBadge: React.FC<{ targetName: string; expiresAt: number }> 
 
 export const TableCenter: React.FC = () => {
   const { socket } = useSocket();
-  const { publicState, privateState, myPlayerId, setHoveredPreview, drawCard, openModal } = useGameStore();
+  const {
+    publicState,
+    privateState,
+    myPlayerId,
+    setHoveredPreview,
+    drawCard,
+    openModal,
+    hiddenArchiveCardIds,
+  } = useGameStore();
 
   const pendingReaction = publicState?.pendingReaction ?? null;
   const myId = privateState?.playerId || myPlayerId;
@@ -100,8 +108,9 @@ export const TableCenter: React.FC = () => {
       {/* Large Side-by-Side Draw Deck + Messy Stacked Archive Pile */}
       <div className="flex items-center justify-center gap-4 sm:gap-7">
         {/* Draw Deck */}
-        <div className="flex flex-col items-center" data-flight-anchor="deck">
+        <div className="flex flex-col items-center">
           <motion.div
+            data-flight-anchor="deck"
             whileTap={isMyDrawPhase ? { scale: 0.93 } : undefined}
             whileHover={isMyDrawPhase ? { scale: 1.05 } : undefined}
             onClick={() => {
@@ -138,9 +147,10 @@ export const TableCenter: React.FC = () => {
         </div>
 
         {/* Messy Tilted Discard Archive */}
-        <div className="flex flex-col items-center" data-flight-anchor="archive">
+        <div className="flex flex-col items-center">
           {recentStack.length > 0 && discardPileTop ? (
             <div
+              data-flight-anchor="archive"
               className="relative w-[clamp(68px,19vw,104px)] aspect-[3/4] cursor-pointer"
               onPointerEnter={(e) => {
                 if (e.pointerType !== 'touch') {
@@ -159,18 +169,23 @@ export const TableCenter: React.FC = () => {
                   const isTop = i === recentStack.length - 1;
                   const angle = STACK_ANGLES[i % STACK_ANGLES.length];
                   const off = STACK_OFFSETS[i % STACK_OFFSETS.length];
+                  const isFlightHidden = Boolean(hiddenArchiveCardIds[card.instanceId]?.length);
                   return (
                     <motion.div
                       key={card.instanceId}
-                      initial={{ scale: 1.25, rotate: angle - 16, y: -18, opacity: 0.4 }}
+                      initial={false}
                       animate={{
                         scale: isTop ? 1 : 0.96,
                         rotate: angle,
                         x: off.x,
                         y: off.y,
-                        opacity: 1,
+                        opacity: isFlightHidden ? 0 : 1,
                       }}
-                      transition={{ type: 'spring', stiffness: 360, damping: 22 }}
+                      transition={
+                        isFlightHidden
+                          ? { duration: 0 }
+                          : { type: 'spring', stiffness: 420, damping: 28 }
+                      }
                       style={{ zIndex: i + 1 }}
                       className="absolute inset-0"
                     >
@@ -184,7 +199,10 @@ export const TableCenter: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="w-[clamp(68px,19vw,104px)] aspect-[3/4] rounded-xl border-2 border-dashed border-ink/35 bg-manila/60 flex items-center justify-center p-2 text-center">
+            <div
+              data-flight-anchor="archive"
+              className="w-[clamp(68px,19vw,104px)] aspect-[3/4] rounded-xl border-2 border-dashed border-ink/35 bg-manila/60 flex items-center justify-center p-2 text-center"
+            >
               <span className="text-[11px] font-cairo font-bold text-ink/60">الأرشيف فاضي</span>
             </div>
           )}

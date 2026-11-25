@@ -51,6 +51,7 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
   const privateState = useGameStore(s => s.privateState);
   const phase = useGameStore(s => s.publicState?.phase);
   const recentSlotHighlights = useGameStore(s => s.publicState?.recentSlotHighlights);
+  const hiddenSlotKeys = useGameStore(s => s.hiddenSlotKeys);
   const [activeBubble, setActiveBubble] = useState<string | null>(null);
 
   const activePeek = privateState?.activePeek ?? null;
@@ -238,12 +239,13 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
           const slotClass = isSide
             ? 'w-[clamp(36px,9.2vw,48px)] aspect-[3/4]'
             : 'w-[clamp(42px,11vw,60px)] aspect-[3/4]';
+          const isSlotFlightHidden = Boolean(hiddenSlotKeys[`${player.id}:${idx}`]?.length);
 
           return (
             <motion.div
               key={`slot-${idx}`}
               data-flight-anchor={`slot-${player.id}-${idx}`}
-              animate={slotHighlight ? { scale: [1, 1.18, 1], rotate: [0, -6, 6, 0] } : {}}
+              animate={slotHighlight && !isSlotFlightHidden ? { scale: [1, 1.18, 1], rotate: [0, -6, 6, 0] } : {}}
               transition={{ duration: 0.5 }}
               className="relative"
             >
@@ -256,36 +258,47 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
                   <span className="text-[9px] font-cairo font-black text-ink/50">{idx + 1}</span>
                 </div>
               ) : (
-                <FlipCard
-                  cardType={revealedCardType}
-                  isRevealed={isRevealed}
-                  isHighlighted={singleMatch || Boolean(multiMatch) || Boolean(slotHighlight)}
-                  sizeClass={slotClass}
-                >
-                  <span className="absolute top-0.5 right-0.5 bg-ink/90 text-wasta-gold text-[8.5px] font-cairo font-black px-1 rounded pointer-events-none z-20 border border-wasta-gold/40 leading-tight">
-                    {idx + 1}
-                  </span>
-                  {wasSeenByMe && !isRevealed && !wasTampered && (
-                    <span
-                      className="absolute bottom-0.5 left-0.5 bg-defense-blue text-white rounded-full p-0.5 border border-white z-20"
-                      title="سبق وشفت الخانة دي"
+                <div className="relative">
+                  {isSlotFlightHidden && (
+                    <div
+                      className={`absolute inset-0 ${slotClass} rounded-md border border-dashed border-ink/35 bg-manila/55 flex items-center justify-center pointer-events-none`}
                     >
-                      <Eye size={7} />
-                    </span>
+                      <span className="text-[9px] font-cairo font-black text-ink/50">{idx + 1}</span>
+                    </div>
                   )}
-                  {wasTampered && !isRevealed && (
-                    <span
-                      className="absolute bottom-0.5 left-0.5 bg-wasta-gold text-ink rounded-full p-0.5 border border-ink z-20"
-                      title="اتبدلت — مش نفس الورقة القديمة!"
+                  <div className={isSlotFlightHidden ? 'opacity-0 pointer-events-none' : 'transition-opacity duration-75'}>
+                    <FlipCard
+                      cardType={revealedCardType}
+                      isRevealed={isRevealed}
+                      isHighlighted={singleMatch || Boolean(multiMatch) || Boolean(slotHighlight)}
+                      sizeClass={slotClass}
                     >
-                      <AlertTriangle size={7} />
-                    </span>
-                  )}
-                </FlipCard>
+                      <span className="absolute top-0.5 right-0.5 bg-ink/90 text-wasta-gold text-[8.5px] font-cairo font-black px-1 rounded pointer-events-none z-20 border border-wasta-gold/40 leading-tight">
+                        {idx + 1}
+                      </span>
+                      {wasSeenByMe && !isRevealed && !wasTampered && (
+                        <span
+                          className="absolute bottom-0.5 left-0.5 bg-defense-blue text-white rounded-full p-0.5 border border-white z-20"
+                          title="سبق وشفت الخانة دي"
+                        >
+                          <Eye size={7} />
+                        </span>
+                      )}
+                      {wasTampered && !isRevealed && (
+                        <span
+                          className="absolute bottom-0.5 left-0.5 bg-wasta-gold text-ink rounded-full p-0.5 border border-ink z-20"
+                          title="اتبدلت — مش نفس الورقة القديمة!"
+                        >
+                          <AlertTriangle size={7} />
+                        </span>
+                      )}
+                    </FlipCard>
+                  </div>
+                </div>
               )}
 
               {/* Live Highlight Label Pill (🔁 اتبدلت / 🤝 اتسرقت / 💥 اتشالت) */}
-              {slotHighlight && (
+              {slotHighlight && !isSlotFlightHidden && (
                 <span
                   className={`pointer-events-none absolute -top-2 inset-x-0 mx-auto w-max px-1 py-0 rounded-full text-[7.5px] font-cairo font-black border border-ink shadow-sm z-30 animate-bounce ${
                     slotHighlight.kind === 'removed'

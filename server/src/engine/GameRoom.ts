@@ -206,6 +206,7 @@ export class GameRoom {
       faceDown: boolean;
       labelAr?: string;
       durationMs?: number;
+      delayMs?: number;
     }>,
   ): void {
     const now = Date.now();
@@ -220,7 +221,8 @@ export class GameRoom {
         cardType: item.cardType,
         faceDown: item.faceDown,
         labelAr: item.labelAr,
-        durationMs: item.durationMs ?? 820,
+        durationMs: item.durationMs ?? 480,
+        delayMs: item.delayMs,
         createdAt: now,
       });
     }
@@ -677,10 +679,10 @@ export class GameRoom {
     if (drawn) {
       this.addCardMotions([{
         from: { zone: 'deck' },
-        to: { zone: 'hand', playerId: player.id },
+        to: { zone: 'hand', playerId: player.id, cardInstanceId: drawn.instanceId },
         faceDown: true,
         labelAr: 'سحب كارت',
-        durationMs: 850,
+        durationMs: 440,
       }]);
     }
     addLogEntry(state, `${player.name} سحب كارت من الكومة`);
@@ -826,20 +828,21 @@ export class GameRoom {
 
       this.addSlotHighlights([{ playerId: caster.id, slotIndex, kind: 'swapped', labelAr: '🗂️ نزّلت ورقة' }]);
       const placeMotions: Parameters<GameRoom['addCardMotions']>[0] = [{
-        from: { zone: 'hand', playerId: caster.id },
+        from: { zone: 'hand', playerId: caster.id, cardInstanceId: card.instanceId },
         to: { zone: 'slot', playerId: caster.id, slotIndex },
         faceDown: true,
         labelAr: `🗂️ نزّل في خانة #${slotIndex + 1}`,
-        durationMs: 950,
+        durationMs: 460,
       }];
       if (replaced) {
         placeMotions.push({
           from: { zone: 'slot', playerId: caster.id, slotIndex },
-          to: { zone: 'archive' },
+          to: { zone: 'archive', cardInstanceId: replaced.instanceId },
           cardType: replaced.cardType,
           faceDown: false,
           labelAr: 'للأرشيف',
-          durationMs: 950,
+          durationMs: 460,
+          delayMs: 90,
         });
       }
       this.addCardMotions(placeMotions);
@@ -928,11 +931,12 @@ export class GameRoom {
 
       caster.hand.splice(cardIdx, 1);
       this.addCardMotions([{
-        from: { zone: 'hand', playerId: caster.id },
-        to: { zone: 'archive' },
+        from: { zone: 'hand', playerId: caster.id, cardInstanceId: card.instanceId },
+        to: { zone: 'archive', cardInstanceId: card.instanceId },
         cardType: card.cardType,
         faceDown: false,
         labelAr: def.nameAr,
+        durationMs: 450,
       }]);
 
       // 1. Reaction-capable Pranks, Wasta, Desk Swap
@@ -1108,14 +1112,17 @@ export class GameRoom {
         executeRecommendation(state, caster);
         this.discardPile.push(card);
         this.actionsRemaining--;
-        const drawnCount = Math.max(0, caster.hand.length - handBefore);
+        const newCards = caster.hand.slice(handBefore);
+        const drawnCount = newCards.length;
         if (drawnCount > 0) {
-          this.addCardMotions([{
+          this.addCardMotions(newCards.map((dc, idx) => ({
             from: { zone: 'deck' },
-            to: { zone: 'hand', playerId: caster.id },
+            to: { zone: 'hand', playerId: caster.id, cardInstanceId: dc.instanceId },
             faceDown: true,
-            labelAr: `+${drawnCount} كروت`,
-          }]);
+            labelAr: 'توصية',
+            durationMs: 420,
+            delayMs: 120 + idx * 85,
+          })));
         }
         this.recordEvent({
           actorId: caster.id,
@@ -1177,11 +1184,12 @@ export class GameRoom {
         this.discardPile.push(cardPlayed);
         this.discardPile.push(bb);
         this.addCardMotions([{
-          from: { zone: 'hand', playerId: target.id },
-          to: { zone: 'archive' },
+          from: { zone: 'hand', playerId: target.id, cardInstanceId: bb.instanceId },
+          to: { zone: 'archive', cardInstanceId: bb.instanceId },
           cardType: 'breakfast_break',
           faceDown: false,
           labelAr: '☕ صد المقلب!',
+          durationMs: 430,
         }]);
         addLogEntry(this.getState(), `${target.name} صد المقلب بـ بريك الفطار!`);
         this.recordEvent({
@@ -1215,11 +1223,13 @@ export class GameRoom {
             const dc = target.hand.pop()!;
             this.discardPile.push(dc);
             discMotions.push({
-              from: { zone: 'hand', playerId: target.id },
-              to: { zone: 'archive' },
+              from: { zone: 'hand', playerId: target.id, cardInstanceId: dc.instanceId },
+              to: { zone: 'archive', cardInstanceId: dc.instanceId },
               cardType: dc.cardType,
               faceDown: false,
               labelAr: '📄 اترمت',
+              durationMs: 440,
+              delayMs: discMotions.length * 80,
             });
           }
           if (discMotions.length > 0) this.addCardMotions(discMotions);
@@ -1290,11 +1300,11 @@ export class GameRoom {
             this.addSlotHighlights([{ playerId: target.id, slotIndex: targetSlotIndex, kind: 'removed', labelAr: '💥 طارت للأرشيف' }]);
             this.addCardMotions([{
               from: { zone: 'slot', playerId: target.id, slotIndex: targetSlotIndex },
-              to: { zone: 'archive' },
+              to: { zone: 'archive', cardInstanceId: removed?.instanceId },
               cardType: removed?.cardType,
               faceDown: !removed,
               labelAr: `💥 طارت خانة #${targetSlotIndex + 1} للأرشيف`,
-              durationMs: 1100,
+              durationMs: 500,
             }]);
           }
           explanationAr = removed
@@ -1310,8 +1320,8 @@ export class GameRoom {
           executeWindow4(state, caster, target);
           this.discardPile.push(cardPlayed);
           this.addCardMotions([
-            { from: { zone: 'hand', playerId: caster.id }, to: { zone: 'hand', playerId: target.id }, faceDown: true, labelAr: '🪟 بدّلت الإيد بالكامل', durationMs: 1200 },
-            { from: { zone: 'hand', playerId: target.id }, to: { zone: 'hand', playerId: caster.id }, faceDown: true, labelAr: '🪟 إيد جديدة في إيدك', durationMs: 1200 },
+            { from: { zone: 'hand', playerId: caster.id }, to: { zone: 'hand', playerId: target.id }, faceDown: true, labelAr: '🪟 بدّلت الإيد بالكامل', durationMs: 540, delayMs: 0 },
+            { from: { zone: 'hand', playerId: target.id }, to: { zone: 'hand', playerId: caster.id }, faceDown: true, labelAr: '🪟 إيد جديدة في إيدك', durationMs: 540, delayMs: 85 },
           ]);
           explanationAr = `${caster.name} بدّل كل ورق إيده مع ${target.name} (اللي قبله في الدور)!`;
           bubbleActorAr = 'خد شباك 4! 🪟';
@@ -1326,12 +1336,13 @@ export class GameRoom {
             this.addSlotHighlights(
               affected.map(slotIndex => ({ playerId: target.id, slotIndex, kind: 'removed', labelAr: '📁 رجعت للإيد' })),
             );
-            this.addCardMotions(affected.map(slotIndex => ({
+            this.addCardMotions(affected.map((slotIndex, idx) => ({
               from: { zone: 'slot', playerId: target.id, slotIndex },
               to: { zone: 'hand', playerId: target.id },
               faceDown: true,
               labelAr: `📁 طارت خانة #${slotIndex + 1} للإيد`,
-              durationMs: 1050,
+              durationMs: 480,
+              delayMs: idx * 75,
             })));
           }
           explanationAr = `${caster.name} رجّع ${affected.length} ورقات من ملف ${target.name} لإيده من تاني!`;
@@ -1354,7 +1365,7 @@ export class GameRoom {
               to: { zone: 'slot', playerId: caster.id, slotIndex: attackerSlotIndex },
               faceDown: true,
               labelAr: `🤝 اتسرقت #${targetSlotIndex + 1} ← #${attackerSlotIndex + 1}`,
-              durationMs: 1150,
+              durationMs: 560,
             }]);
           }
           explanationAr = `${caster.name} استعمل الواسطة وسرق خانة #${(targetSlotIndex ?? 0) + 1} من ${target.name} لخانته #${(attackerSlotIndex ?? 0) + 1}!`;
@@ -1377,14 +1388,16 @@ export class GameRoom {
                 to: { zone: 'slot', playerId: target.id, slotIndex: targetSlotIndex },
                 faceDown: true,
                 labelAr: `🔁 تبديل #${attackerSlotIndex + 1} ↔ #${targetSlotIndex + 1}`,
-                durationMs: 1200,
+                durationMs: 560,
+                delayMs: 0,
               },
               {
                 from: { zone: 'slot', playerId: target.id, slotIndex: targetSlotIndex },
                 to: { zone: 'slot', playerId: caster.id, slotIndex: attackerSlotIndex },
                 faceDown: true,
                 labelAr: `🔁 استلام #${targetSlotIndex + 1} ← #${attackerSlotIndex + 1}`,
-                durationMs: 1200,
+                durationMs: 560,
+                delayMs: 80,
               },
             ]);
           }
@@ -1444,11 +1457,13 @@ export class GameRoom {
         const dc = target.hand.splice(idx, 1)[0];
         this.discardPile.push(dc);
         discMotions.push({
-          from: { zone: 'hand', playerId: target.id },
-          to: { zone: 'archive' },
+          from: { zone: 'hand', playerId: target.id, cardInstanceId: dc.instanceId },
+          to: { zone: 'archive', cardInstanceId: dc.instanceId },
           cardType: dc.cardType,
           faceDown: false,
           labelAr: '📄 اترمت',
+          durationMs: 440,
+          delayMs: discMotions.length * 80,
         });
         removed++;
       }
@@ -1457,11 +1472,13 @@ export class GameRoom {
       const dc = target.hand.pop()!;
       this.discardPile.push(dc);
       discMotions.push({
-        from: { zone: 'hand', playerId: target.id },
-        to: { zone: 'archive' },
+        from: { zone: 'hand', playerId: target.id, cardInstanceId: dc.instanceId },
+        to: { zone: 'archive', cardInstanceId: dc.instanceId },
         cardType: dc.cardType,
         faceDown: false,
         labelAr: '📄 اترمت',
+        durationMs: 440,
+        delayMs: discMotions.length * 80,
       });
       removed++;
     }
@@ -1506,11 +1523,12 @@ export class GameRoom {
       const card = this.discardPile.splice(cardIdx, 1)[0];
       player.hand.push(card);
       this.addCardMotions([{
-        from: { zone: 'archive' },
-        to: { zone: 'hand', playerId: player.id },
+        from: { zone: 'archive', cardInstanceId: card.instanceId },
+        to: { zone: 'hand', playerId: player.id, cardInstanceId: card.instanceId },
         cardType: card.cardType,
         faceDown: false,
         labelAr: '👴 من الأرشيف',
+        durationMs: 480,
       }]);
       const pickedName = CARD_DEFINITIONS[card.cardType].nameAr;
       addLogEntry(this.getState(), `${player.name} أخد «${pickedName}» من الأرشيف!`);
@@ -1548,10 +1566,12 @@ export class GameRoom {
         const dc = player.hand.splice(idx, 1)[0];
         this.discardPile.push(dc);
         excessMotions.push({
-          from: { zone: 'hand', playerId: player.id },
-          to: { zone: 'archive' },
+          from: { zone: 'hand', playerId: player.id, cardInstanceId: dc.instanceId },
+          to: { zone: 'archive', cardInstanceId: dc.instanceId },
           cardType: dc.cardType,
           faceDown: false,
+          durationMs: 430,
+          delayMs: excessMotions.length * 75,
         });
       }
     }
@@ -1560,10 +1580,12 @@ export class GameRoom {
       const dc = player.hand.pop()!;
       this.discardPile.push(dc);
       excessMotions.push({
-        from: { zone: 'hand', playerId: player.id },
-        to: { zone: 'archive' },
+        from: { zone: 'hand', playerId: player.id, cardInstanceId: dc.instanceId },
+        to: { zone: 'archive', cardInstanceId: dc.instanceId },
         cardType: dc.cardType,
         faceDown: false,
+        durationMs: 430,
+        delayMs: excessMotions.length * 75,
       });
     }
     if (excessMotions.length > 0) this.addCardMotions(excessMotions);

@@ -1,5 +1,6 @@
 // ========================
-// EL-KHETM — Studio Acoustic Sound Engine (Web Audio API Foley + Warm Room Reverb)
+// EL-KHETM — Studio Tabletop Acoustic Engine (Web Audio API Foley + Tight Felt Room)
+// Zero-dependency procedural foley synced with 60fps card kinematics
 // ========================
 
 import { useCallback, useEffect } from 'react';
@@ -11,18 +12,24 @@ let masterGain: GainNode | null = null;
 let dryBus: GainNode | null = null;
 let reverbSend: GainNode | null = null;
 let pinkNoiseBuf: AudioBuffer | null = null;
+let lastSettleMs = 0;
 
-function createWarmRoomImpulse(ctx: AudioContext): AudioBuffer {
-  const length = Math.floor(ctx.sampleRate * 0.42);
+function jitter(base: number, pct: number = 0.055): number {
+  return base * (1 + (Math.random() * 2 - 1) * pct);
+}
+
+/** Tight 0.22s felt-covered wooden game table room impulse */
+function createFeltTableImpulse(ctx: AudioContext): AudioBuffer {
+  const length = Math.floor(ctx.sampleRate * 0.22);
   const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
   for (let ch = 0; ch < 2; ch++) {
     const data = impulse.getChannelData(ch);
     let lastOut = 0;
     for (let i = 0; i < length; i++) {
-      const env = Math.pow(1 - i / length, 2.8);
+      const env = Math.pow(1 - i / length, 3.4);
       const white = Math.random() * 2 - 1;
-      lastOut = (lastOut + 0.08 * white) / 1.08; // Gentle warm room low-pass
-      data[i] = lastOut * env * 0.7;
+      lastOut = (lastOut + 0.1 * white) / 1.1; // Damped warm woody reflection
+      data[i] = lastOut * env * 0.52;
     }
   }
   return impulse;
@@ -32,14 +39,14 @@ function getAudioCtx(): AudioContext {
   if (!audioCtx) {
     audioCtx = new AudioContext();
     const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
-    compressor.knee.setValueAtTime(18, audioCtx.currentTime);
-    compressor.ratio.setValueAtTime(4, audioCtx.currentTime);
-    compressor.attack.setValueAtTime(0.004, audioCtx.currentTime);
-    compressor.release.setValueAtTime(0.18, audioCtx.currentTime);
+    compressor.threshold.setValueAtTime(-15, audioCtx.currentTime);
+    compressor.knee.setValueAtTime(16, audioCtx.currentTime);
+    compressor.ratio.setValueAtTime(3.6, audioCtx.currentTime);
+    compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+    compressor.release.setValueAtTime(0.14, audioCtx.currentTime);
 
     masterGain = audioCtx.createGain();
-    masterGain.gain.value = useGameStore.getState().isMuted ? 0 : 0.92;
+    masterGain.gain.value = useGameStore.getState().isMuted ? 0 : 0.9;
     compressor.connect(masterGain).connect(audioCtx.destination);
 
     dryBus = audioCtx.createGain();
@@ -47,9 +54,9 @@ function getAudioCtx(): AudioContext {
     dryBus.connect(compressor);
 
     const convolver = audioCtx.createConvolver();
-    convolver.buffer = createWarmRoomImpulse(audioCtx);
+    convolver.buffer = createFeltTableImpulse(audioCtx);
     reverbSend = audioCtx.createGain();
-    reverbSend.gain.value = 0.22;
+    reverbSend.gain.value = 0.18;
     reverbSend.connect(convolver).connect(compressor);
   }
   if (!useGameStore.getState().isMuted && audioCtx.state === 'suspended') {
@@ -66,7 +73,7 @@ function routeAudio(node: AudioNode, sendWet: boolean = true) {
   }
 }
 
-/** Smooth 1.2s pink-noise buffer (much warmer and more natural than harsh white noise) */
+/** Smooth 1.2s pink-noise buffer (natural cardstock linen texture) */
 function getPinkNoiseBuffer(ctx: AudioContext): AudioBuffer {
   if (pinkNoiseBuf && pinkNoiseBuf.sampleRate === ctx.sampleRate) {
     return pinkNoiseBuf;
@@ -107,19 +114,19 @@ function playFilteredNoise(
 
   const filter = ctx.createBiquadFilter();
   filter.type = type;
-  filter.frequency.setValueAtTime(fStart, t);
-  filter.frequency.exponentialRampToValueAtTime(Math.max(60, fEnd), t + duration);
+  filter.frequency.setValueAtTime(Math.max(40, fStart), t);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(50, fEnd), t + duration);
   filter.Q.value = q;
 
   const g = ctx.createGain();
-  g.gain.setValueAtTime(0.001, t);
-  g.gain.linearRampToValueAtTime(gainPeak, t + Math.min(0.008, duration * 0.25));
-  g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  g.gain.setValueAtTime(0.0005, t);
+  g.gain.linearRampToValueAtTime(gainPeak, t + Math.min(0.006, duration * 0.22));
+  g.gain.exponentialRampToValueAtTime(0.0005, t + duration);
 
   src.connect(filter).connect(g);
   routeAudio(g, wet);
-  src.start(t, Math.random() * 0.6, duration + 0.03);
-  src.stop(t + duration + 0.03);
+  src.start(t, Math.random() * 0.55, duration + 0.025);
+  src.stop(t + duration + 0.025);
 }
 
 function playTone(
@@ -131,14 +138,15 @@ function playTone(
   gainPeak: number,
   lpfCutoff: number = 4200,
   wet: boolean = true,
+  pan: number = 0,
 ) {
   const ctx = getAudioCtx();
   const t = ctx.currentTime + offset;
   const osc = ctx.createOscillator();
   osc.type = type;
-  osc.frequency.setValueAtTime(freqStart, t);
-  if (freqEnd !== freqStart) {
-    osc.frequency.exponentialRampToValueAtTime(Math.max(24, freqEnd), t + duration);
+  osc.frequency.setValueAtTime(Math.max(25, freqStart), t);
+  if (Math.abs(freqEnd - freqStart) > 0.5) {
+    osc.frequency.exponentialRampToValueAtTime(Math.max(25, freqEnd), t + duration);
   }
 
   const lpf = ctx.createBiquadFilter();
@@ -146,130 +154,153 @@ function playTone(
   lpf.frequency.setValueAtTime(lpfCutoff, t);
 
   const g = ctx.createGain();
-  g.gain.setValueAtTime(0.001, t);
-  g.gain.linearRampToValueAtTime(gainPeak, t + Math.min(0.01, duration * 0.2));
-  g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  g.gain.setValueAtTime(0.0005, t);
+  g.gain.linearRampToValueAtTime(gainPeak, t + Math.min(0.009, duration * 0.18));
+  g.gain.exponentialRampToValueAtTime(0.0005, t + duration);
 
   osc.connect(lpf).connect(g);
-  routeAudio(g, wet);
+  if (pan !== 0 && typeof ctx.createStereoPanner === 'function') {
+    const panner = ctx.createStereoPanner();
+    panner.pan.setValueAtTime(pan, t);
+    g.connect(panner);
+    routeAudio(panner, wet);
+  } else {
+    routeAudio(g, wet);
+  }
+
   osc.start(t);
   osc.stop(t + duration + 0.02);
 }
 
-// === Tactile Card & Egyptian Office Sound Effects ===
+// === Individual Studio Foley Voices ===
 
-/** Crisp card slide off felt deck + soft parchment flick */
+/** UNO-style 3-stage linen card flick out of the deck */
 function synthCardDraw() {
-  playFilteredNoise(0, 0.075, 1100, 3200, 1.5, 0.65, 'bandpass');
-  playFilteredNoise(0.04, 0.035, 3600, 1800, 2.1, 0.45, 'bandpass');
-  playTone(0.042, 0.045, 220, 110, 'sine', 0.18, 900);
+  playFilteredNoise(0, 0.015, jitter(3100), jitter(1950), 2.1, 0.42, 'bandpass', false);
+  playFilteredNoise(0.012, 0.062, jitter(1550), jitter(2850), 1.5, 0.58, 'bandpass', true);
+  playFilteredNoise(0.045, 0.045, jitter(1850), jitter(950), 1.2, 0.24, 'lowpass', true);
+  playTone(0.01, 0.032, jitter(290), jitter(170), 'triangle', 0.09, 1050, false);
 }
 
-/** Realistic 2-stage cardstock flip with muted wood settle */
+/** Crisp wrist snap & air bend on flip */
 function synthCardFlip() {
-  playFilteredNoise(0, 0.038, 2800, 1300, 2.2, 0.55, 'bandpass');
-  playFilteredNoise(0.055, 0.052, 1600, 3800, 1.8, 0.55, 'bandpass');
-  playTone(0.06, 0.065, 165, 68, 'sine', 0.28, 750);
+  playFilteredNoise(0, 0.014, jitter(2600), jitter(1500), 1.9, 0.36, 'bandpass', false);
+  playFilteredNoise(0.01, 0.054, jitter(1250), jitter(3300), 1.5, 0.54, 'bandpass', true);
+  playTone(0.014, 0.045, jitter(420), jitter(590), 'sine', 0.08, 1800, true);
 }
 
-/** Heavy felt-and-mahogany desk slap */
+/** Grounded cardstock + walnut felt table placement thud */
 function synthCardSlap() {
-  playFilteredNoise(0, 0.055, 1900, 620, 1.2, 0.72, 'bandpass');
-  playTone(0, 0.09, 145, 44, 'sine', 0.52, 520);
-  playTone(0, 0.04, 290, 95, 'triangle', 0.2, 950);
+  playTone(0, 0.068, jitter(145), jitter(52), 'triangle', 0.34, 580, true);
+  playTone(0.003, 0.032, jitter(340), jitter(165), 'sine', 0.2, 950, false);
+  playFilteredNoise(0.002, 0.024, jitter(1900), jitter(680), 1.3, 0.52, 'bandpass', true);
 }
 
-/** Authoritative brass-and-rubber Egyptian desk stamp THUNK */
+/** Warm mechanical rubber+brass Stamp seal impact */
 function synthStamp() {
-  // Subtle spring latch click
-  playFilteredNoise(0, 0.018, 3800, 2200, 3.0, 0.4, 'highpass');
-  // Deep mahogany thud
-  playTone(0.012, 0.17, 115, 32, 'sine', 0.68, 420);
-  playTone(0.012, 0.075, 210, 58, 'triangle', 0.28, 700);
-  playFilteredNoise(0.012, 0.05, 1200, 380, 1.1, 0.55, 'lowpass');
-  // Subtle rubber ink-pad release
-  playFilteredNoise(0.11, 0.03, 900, 1600, 1.8, 0.16, 'bandpass');
+  playTone(0, 0.14, 112, 42, 'sine', 0.48, 360, true);
+  playTone(0.006, 0.075, 290, 96, 'triangle', 0.24, 920, false);
+  playFilteredNoise(0, 0.03, 1300, 380, 1.0, 0.58, 'lowpass', true);
+  playTone(0.03, 0.09, 820, 620, 'sine', 0.09, 1800, true);
 }
 
-/** Warm tactile card snap + velvet marimba chord */
+/** Crisp ascending mallet-chime lock when matching / earning */
 function synthCardMatch() {
-  synthCardSlap();
-  const chord = [523.25, 659.25, 783.99, 1046.5];
-  chord.forEach((f, idx) => {
-    playTone(0.045 + idx * 0.055, 0.34, f, f, 'sine', 0.22, 3600);
-    playTone(0.045 + idx * 0.055, 0.16, f * 2, f * 2, 'triangle', 0.06, 2800);
-  });
+  playTone(0, 0.11, 523.25, 523.25, 'triangle', 0.19, 3200, true, -0.15);
+  playTone(0.06, 0.12, 659.25, 659.25, 'triangle', 0.2, 3400, true, 0.1);
+  playTone(0.12, 0.26, 783.99, 783.99, 'sine', 0.24, 4200, true, 0);
+  playTone(0.12, 0.22, 1046.5, 1046.5, 'sine', 0.13, 4600, true, 0.2);
 }
 
-/** Soft mysterious paper whisper + warm glass-bell dyad */
+/** Secret peek crystal marimba shimmer */
 function synthPeekChime() {
-  playFilteredNoise(0, 0.055, 2200, 3800, 1.8, 0.36, 'bandpass');
-  playTone(0.03, 0.32, 659.25, 659.25, 'sine', 0.18, 3200);
-  playTone(0.095, 0.38, 987.77, 987.77, 'sine', 0.2, 3400);
-  playTone(0.095, 0.18, 1975.5, 1975.5, 'sine', 0.05, 3600);
+  playTone(0, 0.15, 587.33, 587.33, 'sine', 0.16, 3600, true, -0.18);
+  playTone(0.055, 0.2, 880, 880, 'sine', 0.14, 4200, true, 0.18);
+  playFilteredNoise(0, 0.04, 2400, 3600, 2.0, 0.14, 'bandpass', true);
 }
 
-/** Playful muted-brass prank sting + snappy rim click (not harsh!) */
+/** Cheeky, clean marimba+woodblock prank alert (zero harsh sawtooth) */
 function synthPrankAlarm() {
-  playFilteredNoise(0, 0.03, 2600, 1400, 2.0, 0.42, 'bandpass');
-  // Muted comedic brass double-swell
-  playTone(0.01, 0.14, 349.23, 392.0, 'sawtooth', 0.16, 1250);
-  playTone(0.01, 0.14, 174.61, 196.0, 'triangle', 0.22, 900);
-  playTone(0.16, 0.2, 466.16, 440.0, 'sawtooth', 0.17, 1350);
-  playTone(0.16, 0.2, 233.08, 220.0, 'triangle', 0.24, 950);
+  playTone(0, 0.085, 659.25, 622.25, 'triangle', 0.22, 2400, true, -0.2);
+  playTone(0.075, 0.09, 932.33, 880, 'triangle', 0.22, 2800, true, 0.2);
+  playTone(0.155, 0.13, 783.99, 740, 'triangle', 0.2, 2400, true, 0);
+  playFilteredNoise(0, 0.018, 2200, 1400, 2.6, 0.25, 'bandpass', false);
+  playFilteredNoise(0.075, 0.018, 2600, 1600, 2.6, 0.25, 'bandpass', false);
 }
 
-/** Deep ceramic/bronze deflection chime + warm resonant shield */
+/** Warm bronze-coffee shield deflection chord */
 function synthShieldBlock() {
-  playTone(0, 0.08, 240, 95, 'sine', 0.34, 800);
-  playTone(0.01, 0.35, 880, 880, 'sine', 0.22, 3400);
-  playTone(0.01, 0.28, 1318.5, 1318.5, 'triangle', 0.1, 3200);
-  playTone(0.075, 0.38, 1174.66, 1174.66, 'sine', 0.18, 3400);
+  playTone(0, 0.08, 240, 140, 'triangle', 0.18, 1200, false);
+  playTone(0.015, 0.24, 440, 440, 'sine', 0.2, 3400, true, -0.2);
+  playTone(0.05, 0.26, 659.25, 659.25, 'sine', 0.18, 4200, true, 0.15);
+  playTone(0.09, 0.3, 880, 880, 'sine', 0.15, 4800, true, 0);
 }
 
-/** Subtle crisp wristwatch mechanical tick */
+/** Precision mechanical watch escapement tick-tock */
 function synthTickTock() {
-  playFilteredNoise(0, 0.014, 2800, 1600, 3.2, 0.28, 'bandpass', false);
-  playTone(0, 0.018, 1250, 750, 'sine', 0.1, 2500, false);
+  playFilteredNoise(0, 0.011, 2700, 1550, 3.2, 0.32, 'bandpass', false);
+  playTone(0, 0.022, 920, 740, 'sine', 0.11, 2100, false);
+  playFilteredNoise(0.15, 0.011, 2200, 1250, 3.0, 0.25, 'bandpass', false);
+  playTone(0.15, 0.022, 740, 610, 'sine', 0.09, 1700, false);
 }
 
-/** Rich warm celebratory marimba + brass fanfare */
+/** Celebratory layered brass & glockenspiel win fanfare */
 function synthWinFanfare() {
-  const notes = [523.25, 659.25, 783.99, 987.77, 1046.5];
+  const notes = [523.25, 659.25, 783.99, 1046.5];
   notes.forEach((freq, i) => {
-    const start = i * 0.11;
+    const off = i * 0.095;
     const isLast = i === notes.length - 1;
-    const dur = isLast ? 0.65 : 0.28;
-    playTone(start, dur, freq, freq, 'triangle', isLast ? 0.26 : 0.2, 3200);
-    playTone(start, dur * 0.85, freq * 0.5, freq * 0.5, 'sine', 0.18, 1400);
-    if (isLast) {
-      playTone(start + 0.02, 0.55, 659.25, 659.25, 'sine', 0.14, 2600);
-      playTone(start + 0.02, 0.55, 783.99, 783.99, 'sine', 0.14, 2800);
-    }
+    const dur = isLast ? 0.56 : 0.22;
+    const pan = (i - 1.5) * 0.18;
+    playTone(off, dur, freq, freq, 'triangle', 0.21, 3200, true, pan);
+    playTone(off + 0.01, dur, freq * 2, freq * 2, 'sine', isLast ? 0.14 : 0.08, 5200, true, -pan);
   });
+  playFilteredNoise(0.28, 0.22, 3200, 6000, 1.0, 0.14, 'highpass', true);
 }
 
-/** Metallic office-window shutter rail clatter + heavy bottom lock slam */
+/** Heavy steel window shutter roll & latch */
 function synthShutterClose() {
   for (let i = 0; i < 4; i++) {
-    playFilteredNoise(i * 0.042, 0.036, 2200 - i * 250, 900, 2.0, 0.45, 'bandpass');
+    playFilteredNoise(i * 0.04, 0.032, 2100 - i * 240, 850, 2.0, 0.38, 'bandpass', true);
   }
-  playFilteredNoise(0.16, 0.09, 950, 260, 1.1, 0.72, 'lowpass');
-  playTone(0.17, 0.2, 130, 38, 'sine', 0.6, 460);
-  playTone(0.17, 0.09, 240, 82, 'triangle', 0.24, 900);
+  playFilteredNoise(0.15, 0.085, 880, 240, 1.1, 0.62, 'lowpass', true);
+  playTone(0.16, 0.18, 126, 38, 'sine', 0.48, 420, true);
+  playTone(0.16, 0.08, 220, 76, 'triangle', 0.2, 850, false);
 }
 
-/** Silky card whip across the felt table */
+/** Silky card arc whoosh */
 function synthSwoosh() {
-  playFilteredNoise(0, 0.16, 420, 2600, 1.4, 0.65, 'bandpass');
-  playFilteredNoise(0.08, 0.1, 2200, 680, 1.5, 0.42, 'bandpass');
+  playFilteredNoise(0, 0.15, jitter(460), jitter(2600), 1.4, 0.52, 'bandpass', true);
+  playFilteredNoise(0.07, 0.095, jitter(2100), jitter(720), 1.5, 0.34, 'bandpass', true);
 }
 
-/** Soft muted wooden mallet "nope" double-tap */
+/** Warm walnut double-tap error nope */
 function synthBuzz() {
-  playTone(0, 0.075, 165, 110, 'sine', 0.34, 480);
-  playTone(0.09, 0.11, 135, 82, 'sine', 0.36, 420);
-  playFilteredNoise(0, 0.025, 700, 320, 1.4, 0.25, 'lowpass');
+  playTone(0, 0.072, 168, 112, 'sine', 0.28, 480, false);
+  playTone(0.088, 0.1, 138, 84, 'sine', 0.3, 420, false);
+  playFilteredNoise(0, 0.022, 680, 300, 1.4, 0.2, 'lowpass', false);
+}
+
+/** Ultra-subtle tactile settle foley triggered right on visual landing contact */
+export function playCardSettle(kind: 'felt' | 'hand' = 'felt'): void {
+  if (useGameStore.getState().isMuted) return;
+  if (!audioCtx || audioCtx.state !== 'running') return;
+
+  const nowMs = performance.now();
+  if (nowMs - lastSettleMs < 42) return;
+  lastSettleMs = nowMs;
+
+  try {
+    if (kind === 'hand') {
+      playFilteredNoise(0, 0.016, jitter(2450), jitter(1650), 2.1, 0.14, 'bandpass', false);
+      playTone(0, 0.022, jitter(260), jitter(140), 'sine', 0.05, 850, false);
+    } else {
+      playTone(0, 0.036, jitter(118), jitter(56), 'sine', 0.14, 420, false);
+      playFilteredNoise(0, 0.02, jitter(1420), jitter(620), 1.5, 0.11, 'bandpass', true);
+    }
+  } catch {
+    // Ignore edge AudioContext timing errors
+  }
 }
 
 const SYNTH_MAP: Record<SoundEffect, () => void> = {
@@ -295,7 +326,7 @@ export function useSound() {
   useEffect(() => {
     if (!audioCtx) return;
     if (masterGain) {
-      masterGain.gain.setValueAtTime(isMuted ? 0 : 0.92, audioCtx.currentTime);
+      masterGain.gain.setValueAtTime(isMuted ? 0 : 0.9, audioCtx.currentTime);
     }
     if (isMuted && audioCtx.state === 'running') {
       audioCtx.suspend().catch(() => {});

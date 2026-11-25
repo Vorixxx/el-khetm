@@ -11,6 +11,7 @@ import type {
   AvatarId,
   Card,
   CardType,
+  CardMotionEvent,
   PlayCardPayload,
 } from '@el-khetm/shared';
 import type { TypedSocket } from '../hooks/useSocket';
@@ -109,6 +110,11 @@ interface GameStore {
 
   activeStickers: Record<string, { stickerId: string; timestamp: number }>;
 
+  hiddenHandCardIds: Record<string, string[]>;
+  hiddenSlotKeys: Record<string, string[]>;
+  hiddenArchiveCardIds: Record<string, string[]>;
+  revealFlightTarget: (motionId: string) => void;
+
   toasts: Toast[];
   addToast: (message: string, type: Toast['type']) => void;
   removeToast: (id: string) => void;
@@ -201,6 +207,42 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setHoveredPreview: (hoveredPreview) => set({ hoveredPreview }),
 
   activeStickers: {},
+
+  hiddenHandCardIds: {},
+  hiddenSlotKeys: {},
+  hiddenArchiveCardIds: {},
+  revealFlightTarget: (motionId) => set((s) => {
+    const stripOwner = (record: Record<string, string[]>) => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+      for (const [k, owners] of Object.entries(record)) {
+        if (!owners.includes(motionId)) {
+          next[k] = owners;
+          continue;
+        }
+        changed = true;
+        const filtered = owners.filter((id) => id !== motionId);
+        if (filtered.length > 0) next[k] = filtered;
+      }
+      return changed ? next : record;
+    };
+
+    const nextHand = stripOwner(s.hiddenHandCardIds);
+    const nextSlots = stripOwner(s.hiddenSlotKeys);
+    const nextArchive = stripOwner(s.hiddenArchiveCardIds);
+    if (
+      nextHand === s.hiddenHandCardIds &&
+      nextSlots === s.hiddenSlotKeys &&
+      nextArchive === s.hiddenArchiveCardIds
+    ) {
+      return s;
+    }
+    return {
+      hiddenHandCardIds: nextHand,
+      hiddenSlotKeys: nextSlots,
+      hiddenArchiveCardIds: nextArchive,
+    };
+  }),
 
   toasts: [],
   addToast: (message, type) => {
@@ -315,12 +357,70 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ lobbyState: data });
     };
 
+    const seenMotionIds = new Set<string>();
+    const motionFailsafes = new Map<string, ReturnType<typeof setTimeout>>();
+
     const onPublicState = (data: PublicGameState) => {
       const prev = get().publicState;
       const myId = get().privateState?.playerId || get().myPlayerId;
 
       if (data.phase === 'GAME_OVER' && get().screen === 'lobby' && !prev) {
         return;
+      }
+
+      const now = Date.now();
+      const freshMotions: CardMotionEvent[] = [];
+      for (const m of data.recentCardMotions ?? []) {
+        if (seenMotionIds.has(m.id)) continue;
+        seenMotionIds.add(m.id);
+        const maxAge = (m.delayMs ?? 0) + (m.durationMs ?? 480) + 1200;
+        if (now - m.createdAt <= maxAge) {
+          freshMotions.push(m);
+        }
+      }
+      if (seenMotionIds.size > 120) {
+        const recent = Array.from(seenMotionIds).slice(-60);
+        seenMotionIds.clear();
+        for (const id of recent) seenMotionIds.add(id);
+      }
+
+      let nextHiddenHand = get().hiddenHandCardIds;
+      let nextHiddenSlots = get().hiddenSlotKeys;
+      let nextHiddenArchive = get().hiddenArchiveCardIds;
+
+      if (freshMotions.length > 0) {
+        const addOwner = (
+          base: Record<string, string[]>,
+          key: string,
+          motionId: string,
+        ): Record<string, string[]> => {
+          const existing = base[key] ?? [];
+          if (existing.includes(motionId)) return base;
+          return { ...base, [key]: [...existing, motionId] };
+        };
+
+        for (const m of freshMotions) {
+          let hidesSomething = false;
+          if (m.to.zone === 'hand' && m.to.cardInstanceId) {
+            nextHiddenHand = addOwner(nextHiddenHand, m.to.cardInstanceId, m.id);
+            hidesSomething = true;
+          } else if (m.to.zone === 'slot') {
+            nextHiddenSlots = addOwner(nextHiddenSlots, `${m.to.playerId}:${m.to.slotIndex}`, m.id);
+            hidesSomething = true;
+          } else if (m.to.zone === 'archive' && m.to.cardInstanceId) {
+            nextHiddenArchive = addOwner(nextHiddenArchive, m.to.cardInstanceId, m.id);
+            hidesSomething = true;
+          }
+
+          if (hidesSomething) {
+            const failMs = Math.min(2000, (m.delayMs ?? 0) + (m.durationMs ?? 480) + 520);
+            const timer = setTimeout(() => {
+              motionFailsafes.delete(m.id);
+              get().revealFlightTarget(m.id);
+            }, failMs);
+            motionFailsafes.set(m.id, timer);
+          }
+        }
       }
 
       let nextModal = get().activeModal;
@@ -369,6 +469,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeModal: nextModal,
         modalData: nextModalData,
         interactionMode: nextInteraction,
+        hiddenHandCardIds: nextHiddenHand,
+        hiddenSlotKeys: nextHiddenSlots,
+        hiddenArchiveCardIds: nextHiddenArchive,
       });
     };
 
@@ -438,6 +541,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (socket.connected) onSocketConnect();
 
     return () => {
+      for (const timer of motionFailsafes.values()) clearTimeout(timer);
+      motionFailsafes.clear();
       socket.off('connect', onSocketConnect);
       socket.off('room:created', onCreated);
       socket.off('room:joined', onJoined);
@@ -465,6 +570,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       interactionMode: null,
       hoveredPreview: null,
       activeStickers: {},
+      hiddenHandCardIds: {},
+      hiddenSlotKeys: {},
+      hiddenArchiveCardIds: {},
     });
   },
 }));

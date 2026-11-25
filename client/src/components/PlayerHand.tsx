@@ -56,6 +56,7 @@ export const PlayerHand: React.FC = () => {
     openModal,
     setHoveredPreview,
     interactionMode,
+    hiddenHandCardIds,
   } = useGameStore();
 
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
@@ -256,6 +257,7 @@ export const PlayerHand: React.FC = () => {
               const isSelected = interactionMode?.type === 'place_in_slot' && interactionMode.handCard.instanceId === card.instanceId;
               const isNewlyAdded = newlyAddedIds.has(card.instanceId);
               const isHovered = hoveredCardId === card.instanceId;
+              const isFlightHidden = Boolean(hiddenHandCardIds[card.instanceId]?.length);
 
               const badgeColor =
                 def.category === 'document'
@@ -270,15 +272,22 @@ export const PlayerHand: React.FC = () => {
                 <motion.div
                   key={card.instanceId}
                   className="flex-shrink-0 relative flex flex-col items-center w-[clamp(88px,24vw,116px)]"
-                  initial={{ opacity: 0, y: -28, scale: 0.8 }}
+                  initial={{ opacity: 0, y: 0, scale: 1 }}
                   animate={{
-                    opacity: 1,
-                    y: isHovered ? -8 : isNewlyAdded ? -5 : 0,
+                    opacity: isFlightHidden ? 0 : 1,
+                    y: isHovered ? -8 : isNewlyAdded && !isFlightHidden ? -5 : 0,
                     scale: isHovered ? 1.05 : 1,
                   }}
-                  exit={{ opacity: 0, y: -18, scale: 0.72 }}
-                  style={{ zIndex: isHovered ? 35 : isNewlyAdded ? 25 : i + 1 }}
-                  transition={{ type: 'spring', stiffness: 360, damping: 24 }}
+                  exit={{ opacity: 0, transition: { duration: 0.05 } }}
+                  style={{
+                    zIndex: isHovered ? 35 : isNewlyAdded ? 25 : i + 1,
+                    pointerEvents: isFlightHidden ? 'none' : 'auto',
+                  }}
+                  transition={
+                    isFlightHidden
+                      ? { duration: 0 }
+                      : { type: 'spring', stiffness: 380, damping: 26 }
+                  }
                   onPointerEnter={(e) => {
                     if (e.pointerType === 'touch') return;
                     setHoveredCardId(card.instanceId);
@@ -295,7 +304,7 @@ export const PlayerHand: React.FC = () => {
                     setHoveredPreview(null);
                   }}
                 >
-                  {isNewlyAdded && !isSelected && (
+                  {isNewlyAdded && !isSelected && !isFlightHidden && (
                     <span
                       className="pointer-events-none absolute -top-3 right-1/2 translate-x-1/2 z-40 rounded-full bg-emerald-600 px-2 py-0.5 text-[9.5px] font-black font-cairo text-white shadow-md ring-1 ring-white whitespace-nowrap animate-bounce"
                       dir="rtl"
@@ -303,17 +312,19 @@ export const PlayerHand: React.FC = () => {
                       جديد ✨
                     </span>
                   )}
-                  <CardComponent
-                    cardType={card.cardType}
-                    isSelected={isSelected}
-                    isDimmed={Boolean(error) && isMyTurn && !def.isReactionOnly}
-                    dimmedReason={error || undefined}
-                    onTap={() => handleCardTap(card)}
-                    size="hand"
-                    className={`!w-full ${
-                      isNewlyAdded ? 'ring-2 ring-emerald-500 shadow-[0_0_14px_rgba(16,185,129,0.55)]' : ''
-                    }`}
-                  />
+                  <div className="w-full relative" data-flight-anchor={`hand-card-${card.instanceId}`}>
+                    <CardComponent
+                      cardType={card.cardType}
+                      isSelected={isSelected}
+                      isDimmed={Boolean(error) && isMyTurn && !def.isReactionOnly}
+                      dimmedReason={error || undefined}
+                      onTap={() => handleCardTap(card)}
+                      size="hand"
+                      className={`!w-full ${
+                        isNewlyAdded && !isFlightHidden ? 'ring-2 ring-emerald-500 shadow-[0_0_14px_rgba(16,185,129,0.55)]' : ''
+                      }`}
+                    />
+                  </div>
                   {/* Crisp High-Contrast Arabic Name & Action Label Below Each Card */}
                   <button
                     type="button"

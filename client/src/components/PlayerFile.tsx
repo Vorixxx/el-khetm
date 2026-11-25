@@ -29,6 +29,7 @@ export const PlayerFile: React.FC = () => {
     startPeek,
     placeInSlot,
     openModal,
+    hiddenSlotKeys,
   } = useGameStore();
 
   const [myBubble, setMyBubble] = useState<string | null>(null);
@@ -235,51 +236,61 @@ export const PlayerFile: React.FC = () => {
           );
 
           const slotSize = 'w-[clamp(58px,16vw,84px)] aspect-[3/4]';
+          const isSlotFlightHidden = Boolean(hiddenSlotKeys[`${myId}:${idx}`]?.length);
 
           return (
             <motion.div
               key={`my-slot-${idx}`}
-              data-flight-anchor={`slot-${myId}-${idx}`}
-              animate={slotHighlight ? { scale: [1, 1.1, 1], rotate: [0, -4, 4, 0] } : {}}
+              animate={slotHighlight && !isSlotFlightHidden ? { scale: [1, 1.1, 1], rotate: [0, -4, 4, 0] } : {}}
               transition={{ duration: 0.45 }}
               className="flex flex-col items-center gap-0.5 relative"
             >
               {slot.hasCard ? (
-                <div className="relative">
-                  <FlipCard
-                    cardType={revealedCardType}
-                    isRevealed={isRevealed}
-                    isHighlighted={singleMatch || Boolean(multiMatch) || isSlotSelectable || Boolean(slotHighlight)}
-                    sizeClass={slotSize}
-                    onClick={
-                      isSlotSelectable
-                        ? () => handleSlotTap(idx, slot.hasCard)
-                        : undefined
-                    }
-                  >
-                    {wasSeen && !isRevealed && !wasTampered && (
-                      <span
-                        className="absolute bottom-1 left-1 bg-defense-blue/90 text-white rounded-full p-0.5 border border-white z-20"
-                        title="سبق وشفت أو نزّلت الكارت ده"
-                      >
-                        <Eye size={10} />
-                      </span>
-                    )}
-                    {wasTampered && !isRevealed && (
-                      <span
-                        className="absolute bottom-1 left-1 bg-wasta-gold text-ink rounded-full p-0.5 border border-ink z-20 animate-pulse"
-                        title="الخانة دي اتبدلت من وراك!"
-                      >
-                        <AlertTriangle size={10} />
-                      </span>
-                    )}
-                  </FlipCard>
-                  {isSlotSelectable && (
+                <div className="relative" data-flight-anchor={`slot-${myId}-${idx}`}>
+                  {isSlotFlightHidden && (
+                    <div
+                      className={`absolute inset-0 ${slotSize} rounded-lg border-2 border-dashed border-ink/30 bg-white/50 flex flex-col items-center justify-center p-1 pointer-events-none`}
+                    >
+                      <ShieldAlert size={14} className="text-ink/30 mb-0.5" />
+                      <span className="text-[10px] font-cairo font-bold text-ink/50">فاضية</span>
+                    </div>
+                  )}
+                  <div className={isSlotFlightHidden ? 'opacity-0 pointer-events-none' : 'transition-opacity duration-75'}>
+                    <FlipCard
+                      cardType={revealedCardType}
+                      isRevealed={isRevealed}
+                      isHighlighted={singleMatch || Boolean(multiMatch) || isSlotSelectable || Boolean(slotHighlight)}
+                      sizeClass={slotSize}
+                      onClick={
+                        isSlotSelectable
+                          ? () => handleSlotTap(idx, slot.hasCard)
+                          : undefined
+                      }
+                    >
+                      {wasSeen && !isRevealed && !wasTampered && (
+                        <span
+                          className="absolute bottom-1 left-1 bg-defense-blue/90 text-white rounded-full p-0.5 border border-white z-20"
+                          title="سبق وشفت أو نزّلت الكارت ده"
+                        >
+                          <Eye size={10} />
+                        </span>
+                      )}
+                      {wasTampered && !isRevealed && (
+                        <span
+                          className="absolute bottom-1 left-1 bg-wasta-gold text-ink rounded-full p-0.5 border border-ink z-20 animate-pulse"
+                          title="الخانة دي اتبدلت من وراك!"
+                        >
+                          <AlertTriangle size={10} />
+                        </span>
+                      )}
+                    </FlipCard>
+                  </div>
+                  {isSlotSelectable && !isSlotFlightHidden && (
                     <span className="pointer-events-none absolute -top-2 right-0.5 bg-doc-green text-white text-[9px] font-cairo font-black px-1.5 rounded-full border border-ink animate-bounce z-30">
                       اختار
                     </span>
                   )}
-                  {slotHighlight && !isSlotSelectable && (
+                  {slotHighlight && !isSlotSelectable && !isSlotFlightHidden && (
                     <span
                       className={`pointer-events-none absolute -top-2 inset-x-0 mx-auto w-max px-1.5 py-0 rounded-full text-[8.5px] font-cairo font-black border border-ink shadow-sm z-30 animate-bounce ${
                         slotHighlight.kind === 'removed'
@@ -296,6 +307,7 @@ export const PlayerFile: React.FC = () => {
               ) : (
                 <button
                   type="button"
+                  data-flight-anchor={`slot-${myId}-${idx}`}
                   disabled={!isSlotSelectable}
                   onClick={() => isSlotSelectable && handleSlotTap(idx, false)}
                   className={`${slotSize} rounded-lg border-2 border-dashed flex flex-col items-center justify-center p-1 transition-all ${

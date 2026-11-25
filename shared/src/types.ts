@@ -93,8 +93,8 @@ export interface SpotlightCardNotice {
 
 export type CardMotionLocation =
   | { zone: 'deck' }
-  | { zone: 'archive' }
-  | { zone: 'hand'; playerId: string }
+  | { zone: 'archive'; cardInstanceId?: string }
+  | { zone: 'hand'; playerId: string; cardInstanceId?: string }
   | { zone: 'slot'; playerId: string; slotIndex: number };
 
 export interface CardMotionEvent {
@@ -105,6 +105,7 @@ export interface CardMotionEvent {
   faceDown: boolean;
   labelAr?: string;
   durationMs: number;
+  delayMs?: number;
   createdAt: number;
 }
 
