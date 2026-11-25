@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="510" height="683" viewBox="0 0 510 683">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F7F1E3"/>
+      <stop offset="100%" stop-color="#EADBC0"/>
+    </linearGradient>
+    <linearGradient id="blueGrad2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E40AF"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+  <rect width="510" height="683" rx="26" fill="url(#bg2)"/>
+  <rect x="14" y="14" width="482" height="655" rx="18" fill="none" stroke="#1E293B" stroke-width="5"/>
+  <rect x="24" y="24" width="462" height="635" rx="14" fill="none" stroke="#B45309" stroke-width="2.5"/>
+  <path d="M24 62 L62 24 M448 24 L486 62 M24 621 L62 659 M448 659 L486 621" stroke="#B45309" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Header Ribbon -->
+  <rect x="44" y="42" width="422" height="84" rx="14" fill="url(#blueGrad2)" stroke="#1E293B" stroke-width="4"/>
+  <rect x="52" y="49" width="406" height="70" rx="10" fill="none" stroke="#FBBF24" stroke-width="2" opacity="0.8"/>
+  <text x="255" y="96" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="36" font-weight="900" fill="#FFFDF7" direction="rtl">ترتيب الدوسيه</text>
+  <rect x="165" y="114" width="180" height="30" rx="15" fill="#FFFDF7" stroke="#1E293B" stroke-width="3"/>
+  <text x="255" y="135" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="16" font-weight="800" fill="#1D4ED8" direction="rtl">تحكم في السحب</text>
+
+  <!-- Illustration Box -->
+  <rect x="44" y="156" width="422" height="390" rx="16" fill="#1C2738" stroke="#1E293B" stroke-width="4"/>
+  <circle cx="255" cy="350" r="155" fill="#3B82F6" opacity="0.16"/>
+
+  <!-- 3 Numbered Glowing Cards Stacked & Spread -->
+  <g transform="translate(86,260) rotate(-12)">
+    <rect width="124" height="172" rx="12" fill="#FFFDF7" stroke="#1E293B" stroke-width="4"/>
+    <rect x="10" y="10" width="104" height="152" rx="8" fill="#F3E2BA" stroke="#B45309" stroke-width="2"/>
+    <circle cx="62" cy="70" r="30" fill="#1D4ED8" stroke="#1E293B" stroke-width="3"/>
+    <text x="62" y="81" text-anchor="middle" font-family="Cairo, Arial" font-size="34" font-weight="900" fill="#FFF">3</text>
+    <rect x="26" y="120" width="72" height="10" rx="5" fill="#1E293B" opacity="0.35"/>
+  </g>
+  <g transform="translate(193,234)">
+    <rect width="124" height="172" rx="12" fill="#FFFDF7" stroke="#1E293B" stroke-width="4"/>
+    <rect x="10" y="10" width="104" height="152" rx="8" fill="#E8F5E9" stroke="#15803D" stroke-width="2"/>
+    <circle cx="62" cy="70" r="30" fill="#15803D" stroke="#1E293B" stroke-width="3"/>
+    <text x="62" y="81" text-anchor="middle" font-family="Cairo, Arial" font-size="34" font-weight="900" fill="#FFF">2</text>
+    <rect x="26" y="120" width="72" height="10" rx="5" fill="#15803D" opacity="0.45"/>
+  </g>
+  <g transform="translate(300,255) rotate(12)">
+    <rect width="124" height="172" rx="12" fill="#FFFDF7" stroke="#FBBF24" stroke-width="5"/>
+    <rect x="10" y="10" width="104" height="152" rx="8" fill="#FEF3C7" stroke="#B45309" stroke-width="2.5"/>
+    <circle cx="62" cy="70" r="30" fill="#B45309" stroke="#1E293B" stroke-width="3"/>
+    <text x="62" y="81" text-anchor="middle" font-family="Cairo, Arial" font-size="34" font-weight="900" fill="#FFF">1</text>
+    <text x="62" y="138" text-anchor="middle" font-family="Cairo, Arial" font-size="16" font-weight="900" fill="#B45309">فوق الكومة</text>
+  </g>
+
+  <!-- Upward control arrows -->
+  <path d="M160 475 C210 510, 300 510, 350 475" fill="none" stroke="#FBBF24" stroke-width="7" stroke-linecap="round"/>
+  <polygon points="358,466 334,470 347,488" fill="#FBBF24"/>
+  <polygon points="152,466 176,470 163,488" fill="#FBBF24"/>
+
+  <!-- Bottom Scroll -->
+  <rect x="44" y="562" width="422" height="80" rx="14" fill="#FFFDF7" stroke="#1E293B" stroke-width="4"/>
+  <rect x="52" y="569" width="406" height="66" rx="10" fill="none" stroke="#B45309" stroke-width="2"/>
+  <text x="255" y="598" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="21" font-weight="800" fill="#1E293B" direction="rtl">شوف أول 3 كروت في السحب</text>
+  <text x="255" y="624" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="20" font-weight="800" fill="#1D4ED8" direction="rtl">ورتبهم من فوق على مزاجك!</text>
+</svg>

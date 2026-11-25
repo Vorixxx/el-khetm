@@ -3,7 +3,12 @@
 // ========================
 
 import type { Server as SocketServer, Socket } from 'socket.io';
-import type { ClientToServerEvents, ServerToClientEvents, DocumentCardType } from '@el-khetm/shared';
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  DrawSource,
+  PlayCardPayload,
+} from '@el-khetm/shared';
 import { GAME_CONSTANTS, MEME_STICKERS } from '@el-khetm/shared';
 import { RoomManager } from './RoomManager';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +19,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
   io.on('connection', (rawSocket: Socket) => {
     const socket = rawSocket as TypedSocket;
 
-    // --- Room Creation ---
     socket.on('room:create', (data: { playerName: string; avatarId: string; sessionId: string }) => {
       const { playerName, avatarId, sessionId } = data;
       if (!playerName?.trim()) {
@@ -32,7 +36,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room.broadcastLobbyState();
     });
 
-    // --- Room Joining ---
     socket.on('room:join', (data: { roomCode: string; playerName: string; avatarId: string; sessionId: string }) => {
       const { roomCode, playerName, avatarId, sessionId } = data;
       if (!playerName?.trim()) {
@@ -75,7 +78,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room.broadcastLobbyState();
     });
 
-    // --- Quick Play ---
     socket.on('room:quick_play', (data: { playerName: string; avatarId: string; sessionId: string; botCount: number }) => {
       const { playerName, avatarId, sessionId, botCount } = data;
       if (!playerName?.trim()) {
@@ -100,7 +102,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       setTimeout(() => room.startGame(), 500);
     });
 
-    // --- Reconnect ---
     socket.on('room:reconnect', (data: { roomCode: string; sessionId: string }) => {
       const { roomCode, sessionId } = data;
       const room = roomManager.getRoom(roomCode);
@@ -120,7 +121,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       socket.emit('room:joined', { roomCode: room.roomCode, playerId: player.id });
     });
 
-    // --- Add Bot ---
     socket.on('room:add_bot', () => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode) return;
@@ -137,7 +137,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room.broadcastLobbyState();
     });
 
-    // --- Remove Bot ---
     socket.on('room:remove_bot', (data: { botId: string }) => {
       const { botId } = data;
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
@@ -151,7 +150,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room.broadcastLobbyState();
     });
 
-    // --- Start Game ---
     socket.on('room:start_game', () => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode) return;
@@ -168,13 +166,10 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room.startGame();
     });
 
-    // --- Leave Room ---
     socket.on('room:leave', () => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode) return;
 
-      // Always leave the socket room and clear socket metadata first so the leaving
-      // player never receives stale broadcasts from the old room
       socket.leave(roomCode);
       socket.data = {};
 
@@ -196,66 +191,92 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       }
     });
 
-    // --- Play Card ---
-    socket.on('action:play_card', (data: { cardInstanceId: string; targetPlayerId?: string; targetDocument?: DocumentCardType }) => {
-      const { cardInstanceId, targetPlayerId, targetDocument } = data;
+    // --- Strategic Skrew + El-Khetm Actions ---
+
+    socket.on('action:start_peek', (data: { slotIndex: number }) => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode || !playerId) return;
-
       const room = roomManager.getRoom(roomCode);
-      if (!room) return;
-
-      room.handlePlayCard(playerId, cardInstanceId, targetPlayerId, targetDocument);
+      room?.handleStartPeek(playerId, data.slotIndex);
     });
 
-    // --- End Turn ---
+    socket.on('action:draw_card', (data: { source: DrawSource; marketIndex?: number }) => {
+      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
+      if (!roomCode || !playerId) return;
+      const room = roomManager.getRoom(roomCode);
+      room?.handleDrawCard(playerId, data.source, data.marketIndex);
+    });
+
+    socket.on('action:place_in_slot', (data: { cardInstanceId: string; slotIndex: number }) => {
+      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
+      if (!roomCode || !playerId) return;
+      const room = roomManager.getRoom(roomCode);
+      room?.handlePlaceInSlot(playerId, data.cardInstanceId, data.slotIndex);
+    });
+
+    socket.on('action:match_archive', (data: { slotIndex: number }) => {
+      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
+      if (!roomCode || !playerId) return;
+      const room = roomManager.getRoom(roomCode);
+      room?.handleMatchArchive(playerId, data.slotIndex);
+    });
+
+    socket.on('action:close_window', () => {
+      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
+      if (!roomCode || !playerId) return;
+      const room = roomManager.getRoom(roomCode);
+      room?.handleCloseWindow(playerId);
+    });
+
+    socket.on('action:play_card', (data: PlayCardPayload) => {
+      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
+      if (!roomCode || !playerId) return;
+      const room = roomManager.getRoom(roomCode);
+      room?.handlePlayCard(playerId, data);
+    });
+
+    socket.on('action:sort_deck', (data: { orderedInstanceIds: string[] }) => {
+      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
+      if (!roomCode || !playerId) return;
+      const room = roomManager.getRoom(roomCode);
+      room?.handleSortDeck(playerId, data.orderedInstanceIds);
+    });
+
+    socket.on('action:target_discard', (data: { cardInstanceIds: string[] }) => {
+      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
+      if (!roomCode || !playerId) return;
+      const room = roomManager.getRoom(roomCode);
+      room?.handleTargetDiscard(playerId, data.cardInstanceIds);
+    });
+
     socket.on('action:end_turn', () => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode || !playerId) return;
-
       const room = roomManager.getRoom(roomCode);
-      if (!room) return;
-
-      room.handleEndTurn(playerId);
+      room?.handleEndTurn(playerId);
     });
 
-    // --- React ---
     socket.on('action:react', (data: { block: boolean }) => {
-      const { block } = data;
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode || !playerId) return;
-
       const room = roomManager.getRoom(roomCode);
-      if (!room) return;
-
-      room.handleReaction(playerId, block);
+      room?.handleReaction(playerId, data.block);
     });
 
-    // --- Pick Archive ---
     socket.on('action:pick_archive', (data: { cardInstanceId: string }) => {
-      const { cardInstanceId } = data;
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode || !playerId) return;
-
       const room = roomManager.getRoom(roomCode);
-      if (!room) return;
-
-      room.handlePickArchive(playerId, cardInstanceId);
+      room?.handlePickArchive(playerId, data.cardInstanceId);
     });
 
-    // --- Discard Cards ---
     socket.on('action:discard_cards', (data: { cardInstanceIds: string[] }) => {
-      const { cardInstanceIds } = data;
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode || !playerId) return;
-
       const room = roomManager.getRoom(roomCode);
-      if (!room) return;
-
-      room.handleDiscardCards(playerId, cardInstanceIds);
+      room?.handleDiscardCards(playerId, data.cardInstanceIds);
     });
 
-    // --- Send Meme Sticker ---
     socket.on('action:send_sticker', (data: { stickerId: string }) => {
       const { stickerId } = data;
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
@@ -268,7 +289,6 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room.handleSendSticker(playerId, stickerId);
     });
 
-    // --- Disconnect ---
     socket.on('disconnect', () => {
       const { roomCode } = socket.data || {} as Record<string, string>;
       if (!roomCode) return;

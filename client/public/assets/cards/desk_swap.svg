@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="510" height="683" viewBox="0 0 510 683">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F7F1E3"/>
+      <stop offset="100%" stop-color="#EADBC0"/>
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E40AF"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#B46A32"/>
+      <stop offset="100%" stop-color="#87481C"/>
+    </linearGradient>
+  </defs>
+  <!-- Card Base & Art Deco Border -->
+  <rect width="510" height="683" rx="26" fill="url(#bg)"/>
+  <rect x="14" y="14" width="482" height="655" rx="18" fill="none" stroke="#1E293B" stroke-width="5"/>
+  <rect x="24" y="24" width="462" height="635" rx="14" fill="none" stroke="#B45309" stroke-width="2.5"/>
+  <!-- Corner Ornaments -->
+  <path d="M24 62 L62 24 M448 24 L486 62 M24 621 L62 659 M448 659 L486 621" stroke="#B45309" stroke-width="4" stroke-linecap="round"/>
+  <!-- Top Banner Ribbon -->
+  <rect x="44" y="42" width="422" height="84" rx="14" fill="url(#blueGrad)" stroke="#1E293B" stroke-width="4"/>
+  <rect x="52" y="49" width="406" height="70" rx="10" fill="none" stroke="#FBBF24" stroke-width="2" opacity="0.8"/>
+  <text x="255" y="96" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="38" font-weight="900" fill="#FFFDF7" direction="rtl">تبديل مكاتب</text>
+  <!-- Sub Pill -->
+  <rect x="170" y="114" width="170" height="30" rx="15" fill="#FFFDF7" stroke="#1E293B" stroke-width="3"/>
+  <text x="255" y="135" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="16" font-weight="800" fill="#1D4ED8" direction="rtl">خد وهات سراً</text>
+
+  <!-- Center Illustration Frame -->
+  <rect x="44" y="156" width="422" height="390" rx="16" fill="#182235" stroke="#1E293B" stroke-width="4"/>
+  <!-- Radial glow -->
+  <circle cx="255" cy="345" r="145" fill="#1D4ED8" opacity="0.22"/>
+  <circle cx="255" cy="345" r="105" fill="#FBBF24" opacity="0.1"/>
+
+  <!-- Left Desk -->
+  <g transform="translate(65,375)">
+    <rect x="0" y="0" width="145" height="22" rx="5" fill="url(#wood)" stroke="#1E293B" stroke-width="3.5"/>
+    <rect x="10" y="22" width="125" height="90" rx="4" fill="#6F3916" stroke="#1E293B" stroke-width="3.5"/>
+    <rect x="26" y="40" width="93" height="26" rx="3" fill="#8C4B20" stroke="#1E293B" stroke-width="2.5"/>
+    <circle cx="72" cy="53" r="4.5" fill="#FBBF24" stroke="#1E293B" stroke-width="2"/>
+  </g>
+  <!-- Right Desk -->
+  <g transform="translate(300,375)">
+    <rect x="0" y="0" width="145" height="22" rx="5" fill="url(#wood)" stroke="#1E293B" stroke-width="3.5"/>
+    <rect x="10" y="22" width="125" height="90" rx="4" fill="#6F3916" stroke="#1E293B" stroke-width="3.5"/>
+    <rect x="26" y="40" width="93" height="26" rx="3" fill="#8C4B20" stroke="#1E293B" stroke-width="2.5"/>
+    <circle cx="72" cy="53" r="4.5" fill="#FBBF24" stroke="#1E293B" stroke-width="2"/>
+  </g>
+
+  <!-- Swapping Dossiers -->
+  <g transform="translate(92,272) rotate(-10)">
+    <rect x="0" y="0" width="96" height="114" rx="10" fill="#F3E2BA" stroke="#1E293B" stroke-width="4"/>
+    <path d="M12 0 L46 0 L54 14 L12 14 Z" fill="#D97706" stroke="#1E293B" stroke-width="3"/>
+    <circle cx="48" cy="60" r="24" fill="none" stroke="#B91C1C" stroke-width="4" stroke-dasharray="6 3"/>
+    <text x="48" y="67" text-anchor="middle" font-family="Cairo, Arial" font-size="22" font-weight="900" fill="#B91C1C">؟</text>
+  </g>
+  <g transform="translate(322,256) rotate(10)">
+    <rect x="0" y="0" width="96" height="114" rx="10" fill="#E8F5E9" stroke="#1E293B" stroke-width="4"/>
+    <path d="M12 0 L46 0 L54 14 L12 14 Z" fill="#15803D" stroke="#1E293B" stroke-width="3"/>
+    <circle cx="48" cy="60" r="24" fill="none" stroke="#15803D" stroke-width="4"/>
+    <text x="48" y="68" text-anchor="middle" font-family="Cairo, Arial" font-size="22" font-weight="900" fill="#15803D">★</text>
+  </g>
+
+  <!-- Bold Swooshing Swap Arrows -->
+  <path d="M182 232 C225 190, 285 190, 326 232" fill="none" stroke="#FBBF24" stroke-width="10" stroke-linecap="round"/>
+  <polygon points="336,242 310,234 328,216" fill="#FBBF24" stroke="#1E293B" stroke-width="2.5"/>
+  <path d="M328 424 C285 466, 225 466, 184 424" fill="none" stroke="#38BDF8" stroke-width="10" stroke-linecap="round"/>
+  <polygon points="174,414 200,422 182,440" fill="#38BDF8" stroke="#1E293B" stroke-width="2.5"/>
+
+  <!-- Bottom Parchment Scroll -->
+  <rect x="44" y="562" width="422" height="80" rx="14" fill="#FFFDF7" stroke="#1E293B" stroke-width="4"/>
+  <rect x="52" y="569" width="406" height="66" rx="10" fill="none" stroke="#B45309" stroke-width="2"/>
+  <text x="255" y="598" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="21" font-weight="800" fill="#1E293B" direction="rtl">بدّل ورقة مقلوبة من ملفك</text>
+  <text x="255" y="624" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="20" font-weight="800" fill="#1D4ED8" direction="rtl">مع ورقة مقلوبة عند خصم سراً</text>
+</svg>

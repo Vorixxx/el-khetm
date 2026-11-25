@@ -1,6 +1,5 @@
 // ========================
-// EL-KHETM (الختم) — Card Effects Engine
-// Pure functions that execute each card's effect on the game state
+// EL-KHETM (الختم) — Card Effects Engine (Fair Positional + Anti-Spam Edition)
 // ========================
 
 import {
@@ -14,9 +13,7 @@ import {
   CARD_DEFINITIONS,
   getCardDef,
   isDocumentCard,
-  canPlayEagleSeal,
   shuffleDeck,
-  EAGLE_SEAL_PREREQUISITES,
 } from '@el-khetm/shared';
 
 // === Internal Player State (server only) ===
@@ -29,8 +26,19 @@ export interface ServerPlayer {
   isDisconnected: boolean;
   isFrozen: boolean;
   frozenCard: Card | null;
+  /** Anti-spam shield until this player's next turn starts */
+  isImmuneThisRound: boolean;
+  /** Closed 4-slot dossier on the table */
+  dossierSlots: (Card | null)[];
+  startPeeksRemaining: number;
+  matchScore: number;
+  /** Memory map: targetPlayerId -> set of slot indices this player has seen/placed */
+  seenSlotsByPlayer: Record<string, Set<number>>;
+  /** Slots previously seen by this player that were tampered behind their back */
+  tamperedSlotsByPlayer: Record<string, Set<number>>;
+  /** Bot numeric memory: targetPlayerId -> slotIndex -> CardType */
+  botMemory: Record<string, Record<number, CardType | null>>;
   file: DocumentCardType[];
-  fileCards: Card[];
   hand: Card[];
   socketId: string | null;
   sessionId: string;
@@ -38,7 +46,9 @@ export interface ServerPlayer {
 
 export interface ServerGameState {
   players: ServerPlayer[];
+  currentTurnIndex: number;
   deck: Card[];
+  openMarket: (Card | null)[];
   discardPile: Card[];
   globalEffects: GlobalEffects;
   activeMedhatCard: Card | null;
@@ -46,65 +56,114 @@ export interface ServerGameState {
 }
 
 export function syncPlayerFile(player: ServerPlayer): void {
-  player.file = player.fileCards.map(c => c.cardType as DocumentCardType);
+  player.file = player.dossierSlots
+    .filter((c): c is Card => Boolean(c && isDocumentCard(c.cardType)))
+    .map(c => c.cardType as DocumentCardType);
 }
 
-// === Reshuffle Logic ===
+export function getNextPlayer(state: ServerGameState): ServerPlayer | undefined {
+  if (state.players.length < 2) return undefined;
+  return state.players[(state.currentTurnIndex + 1) % state.players.length];
+}
 
-/**
- * Before EVERY draw, if deck is empty:
- * keep top of discardPile, shuffle rest into deck.
- * Returns true if reshuffle occurred.
- */
+export function getPrevPlayer(state: ServerGameState): ServerPlayer | undefined {
+  if (state.players.length < 2) return undefined;
+  return state.players[(state.currentTurnIndex - 1 + state.players.length) % state.players.length];
+}
+
+export function markSlotSeen(
+  viewer: ServerPlayer,
+  targetPlayerId: string,
+  slotIndex: number,
+  cardType: CardType | null,
+): void {
+  if (!viewer.seenSlotsByPlayer[targetPlayerId]) {
+    viewer.seenSlotsByPlayer[targetPlayerId] = new Set();
+  }
+  viewer.seenSlotsByPlayer[targetPlayerId].add(slotIndex);
+  viewer.tamperedSlotsByPlayer[targetPlayerId]?.delete(slotIndex);
+
+  if (!viewer.botMemory[targetPlayerId]) {
+    viewer.botMemory[targetPlayerId] = {};
+  }
+  viewer.botMemory[targetPlayerId][slotIndex] = cardType;
+}
+
+export function clearSlotMemoryAcrossPlayers(
+  players: ServerPlayer[],
+  targetPlayerId: string,
+  slotIndex: number,
+  markTamperedForOthers: boolean = false,
+): void {
+  for (const p of players) {
+    const previouslySaw = p.seenSlotsByPlayer[targetPlayerId]?.has(slotIndex) ?? false;
+    p.seenSlotsByPlayer[targetPlayerId]?.delete(slotIndex);
+    if (markTamperedForOthers && previouslySaw) {
+      if (!p.tamperedSlotsByPlayer[targetPlayerId]) {
+        p.tamperedSlotsByPlayer[targetPlayerId] = new Set();
+      }
+      p.tamperedSlotsByPlayer[targetPlayerId].add(slotIndex);
+    } else if (!markTamperedForOthers) {
+      p.tamperedSlotsByPlayer[targetPlayerId]?.delete(slotIndex);
+    }
+    if (p.botMemory[targetPlayerId]) {
+      delete p.botMemory[targetPlayerId][slotIndex];
+    }
+  }
+}
+
+// === Reshuffle & Draw Logic ===
+
 export function reshuffleIfNeeded(state: ServerGameState): boolean {
   if (state.deck.length > 0) return false;
-  if (state.discardPile.length <= 1) return false; // Need at least 2 cards (1 to keep on top)
+  if (state.discardPile.length <= 1) return false;
 
-  // Keep the top card of discard pile
   const topCard = state.discardPile.pop()!;
-  // Take all remaining discard pile cards into deck (mutate arrays cleanly)
   const recycled = state.discardPile.splice(0, state.discardPile.length);
   state.discardPile.push(topCard);
   state.deck.push(...recycled);
-  // Shuffle the new deck
   shuffleDeck(state.deck);
 
   addLogEntry(state, 'تم تفنيط الأرشيف من جديد!');
   return true;
 }
 
-/**
- * Draw a single card from deck into a player's hand.
- * Triggers reshuffle if needed.
- * Returns the drawn card or null if no cards available.
- */
-export function drawCard(state: ServerGameState, player: ServerPlayer): Card | null {
+export function popDeckCard(state: ServerGameState): Card | null {
   reshuffleIfNeeded(state);
   if (state.deck.length === 0) return null;
-  const card = state.deck.pop()!;
+  return state.deck.pop()!;
+}
+
+export function drawCard(state: ServerGameState, player: ServerPlayer): Card | null {
+  const card = popDeckCard(state);
+  if (!card) return null;
   player.hand.push(card);
   return card;
 }
 
-/**
- * Draw multiple cards (used by recommendation).
- * Checks reshuffle before EACH draw.
- */
 export function drawCards(state: ServerGameState, player: ServerPlayer, count: number): Card[] {
   const drawn: Card[] = [];
   for (let i = 0; i < count; i++) {
     const card = drawCard(state, player);
-    if (!card) break; // No more cards available
+    if (!card) break;
     drawn.push(card);
   }
   return drawn;
+}
+
+export function refillOpenMarket(state: ServerGameState): void {
+  for (let i = 0; i < GAME_CONSTANTS.OPEN_MARKET_SIZE; i++) {
+    if (!state.openMarket[i]) {
+      state.openMarket[i] = popDeckCard(state);
+    }
+  }
 }
 
 // === Action Log ===
 
 export function addLogEntry(state: ServerGameState, message: string): void {
   state.actionLog.push(message);
-  if (state.actionLog.length > 5) {
+  if (state.actionLog.length > 6) {
     state.actionLog.shift();
   }
 }
@@ -116,117 +175,137 @@ export interface PlayValidation {
   error?: string;
 }
 
-/**
- * Validate whether a card can be played in the current state.
- */
 export function validateCardPlay(
   state: ServerGameState,
   caster: ServerPlayer,
   card: Card,
   targetPlayerId?: string,
-  targetDocument?: DocumentCardType,
+  targetSlotIndex?: number,
+  ownSlotIndex?: number,
+  burnCardInstanceId?: string,
 ): PlayValidation {
   const def = getCardDef(card.cardType);
 
-  // Reaction-only cards can't be played proactively
   if (def.isReactionOnly) {
     return { valid: false, error: 'الكارت ده بيتلعب كرد فعل بس' };
   }
 
-  // Document-specific validations
+  if (def.category === 'trap') {
+    return { valid: false, error: 'ورقة عقوبة! بدّلها لخصم بـ «تبديل مكاتب» أو احرقها كـ رسوم' };
+  }
+
   if (isDocumentCard(card.cardType)) {
-    if (card.cardType === 'eagle_seal') {
-      if (!canPlayEagleSeal(caster.file)) {
-        return { valid: false, error: 'محتاج الـ 3 ورقات الأول' };
-      }
-    } else if (card.cardType === 'manager_sign') {
-      if (state.globalEffects.medhatVacationUntilPlayerId !== null) {
-        return { valid: false, error: 'الأستاذ مدحت في إجازة!' };
-      }
-      if (caster.file.includes('manager_sign')) {
-        return { valid: false, error: 'عندك في الملف' };
-      }
-    } else {
-      // id_copy, stamp_duty
-      if (caster.file.includes(card.cardType)) {
-        return { valid: false, error: 'عندك في الملف' };
-      }
+    return { valid: false, error: 'حط المستند جوه خانة في ملفك' };
+  }
+
+  // Burn cost validation
+  if (def.burnCost > 0) {
+    if (!burnCardInstanceId || burnCardInstanceId === card.instanceId) {
+      return { valid: false, error: 'لازم تختار كارت تاني من إيدك تحرقه كـ رسوم' };
+    }
+    if (!caster.hand.some(c => c.instanceId === burnCardInstanceId)) {
+      return { valid: false, error: 'كارت الحرق مش في إيدك' };
     }
   }
 
-  // Target validation for targeted cards
-  if (def.targetsOpponent) {
-    if (!targetPlayerId) {
-      return { valid: false, error: 'لازم تختار خصم' };
+  // Fair positional validation
+  if (def.positionalTarget === 'next') {
+    const next = getNextPlayer(state);
+    if (!next || next.id === caster.id) return { valid: false, error: 'مفيش لاعب بعدك' };
+    if (card.cardType === 'system_down' && next.isFrozen) {
+      return { valid: false, error: `${next.name} (اللي بعدك) متجمد أصلاً` };
     }
+    if (card.cardType === 'missing_papers' && next.hand.length === 0) {
+      return { valid: false, error: `${next.name} (اللي بعدك) إيده فاضية` };
+    }
+    return { valid: true };
+  }
+
+  if (def.positionalTarget === 'prev') {
+    const prev = getPrevPlayer(state);
+    if (!prev || prev.id === caster.id) return { valid: false, error: 'مفيش لاعب قبلك' };
+    return { valid: true };
+  }
+
+  if (card.cardType === 'show_me_all') {
+    const anyCardOnTable = state.players.some(p => p.dossierSlots.some(Boolean));
+    if (!anyCardOnTable) return { valid: false, error: 'كل الخانات على الترابيزة فاضية' };
+    return { valid: true };
+  }
+
+  // Any-slot peek (drawer_peek)
+  if (def.targetsAnySlot) {
+    if (!targetPlayerId) return { valid: false, error: 'اختار اللاعب اللي هتبص في درْجه' };
     const target = state.players.find(p => p.id === targetPlayerId);
-    if (!target) {
-      return { valid: false, error: 'الخصم مش موجود' };
+    if (!target) return { valid: false, error: 'اللاعب مش موجود' };
+    if (targetSlotIndex === undefined || targetSlotIndex < 0 || targetSlotIndex >= GAME_CONSTANTS.DOSSIER_SLOTS) {
+      return { valid: false, error: 'اختار رقم الخانة (1-4)' };
     }
-    if (target.id === caster.id) {
-      return { valid: false, error: 'مش ممكن تستهدف نفسك' };
+    if (!target.dossierSlots[targetSlotIndex]) return { valid: false, error: 'الخانة دي فاضية' };
+    return { valid: true };
+  }
+
+  // Manually targeted attacks / steals (subject to Anti-Spam Round Immunity!)
+  if (def.targetsOpponent) {
+    if (!targetPlayerId) return { valid: false, error: 'لازم تختار خصم' };
+    const target = state.players.find(p => p.id === targetPlayerId);
+    if (!target) return { valid: false, error: 'الخصم مش موجود' };
+    if (target.id === caster.id) return { valid: false, error: 'مش ممكن تستهدف نفسك' };
+    if (target.isImmuneThisRound) {
+      return { valid: false, error: `🛡️ ${target.name} محصّن ضد المقالب لحد ما ييجي دوره!` };
     }
 
-    // Card-specific target validations
+    const validSlot = (idx?: number) =>
+      idx !== undefined && idx >= 0 && idx < GAME_CONSTANTS.DOSSIER_SLOTS;
+
     switch (card.cardType) {
-      case 'system_down':
-        if (target.isFrozen) {
-          return { valid: false, error: 'الخصم ده متجمد أصلاً' };
-        }
-        break;
       case 'come_tomorrow':
-        if (target.file.length === 0) {
-          return { valid: false, error: 'الخصم ملفه فاضي' };
-        }
-        if (!targetDocument) {
-          return { valid: false, error: 'لازم تختار ورقة من ملف الخصم' };
-        }
-        if (!target.file.includes(targetDocument)) {
-          return { valid: false, error: 'الورقة مش في ملف الخصم' };
+        if (!validSlot(targetSlotIndex) || !target.dossierSlots[targetSlotIndex!]) {
+          return { valid: false, error: 'الخانة دي فاضية' };
         }
         break;
-      case 'missing_papers':
-        if (target.hand.length === 0) {
-          return { valid: false, error: 'الخصم مفيش في إيده كروت' };
+
+      case 'file_lost': {
+        const hasCard = target.dossierSlots.some(Boolean);
+        if (!hasCard) {
+          return { valid: false, error: 'ملف الخصم فاضي' };
         }
         break;
-      case 'file_lost':
-        if (target.file.length === 0) {
-          return { valid: false, error: 'الخصم ملفه فاضي' };
-        }
-        break;
+      }
+
       case 'wasta':
-        if (target.file.length === 0) {
-          return { valid: false, error: 'الخصم ملفه فاضي' };
+        if (!validSlot(targetSlotIndex) || !target.dossierSlots[targetSlotIndex!]) {
+          return { valid: false, error: 'اختار خانة فيها ورقة من ملف الخصم' };
         }
-        if (!targetDocument) {
-          return { valid: false, error: 'لازم تختار ورقة من ملف الخصم' };
+        if (!validSlot(ownSlotIndex)) {
+          return { valid: false, error: 'اختار الخانة في ملفك اللي هتحط فيها الورقة' };
         }
-        if (!target.file.includes(targetDocument)) {
-          return { valid: false, error: 'الورقة مش في ملف الخصم' };
+        break;
+
+      case 'desk_swap':
+        if (!validSlot(targetSlotIndex) || !target.dossierSlots[targetSlotIndex!]) {
+          return { valid: false, error: 'اختار خانة فيها كارت عند الخصم' };
         }
-        if (caster.file.includes(targetDocument)) {
-          return { valid: false, error: 'عندك الورقة دي في ملفك' };
+        if (!validSlot(ownSlotIndex) || !caster.dossierSlots[ownSlotIndex!]) {
+          return { valid: false, error: 'اختار خانة فيها كارت من ملفك للتبديل' };
         }
         break;
     }
   }
 
-  // uncle_gamal: discard pile must not be empty
-  if (card.cardType === 'uncle_gamal') {
-    if (state.discardPile.length === 0) {
-      return { valid: false, error: 'الأرشيف فاضي' };
-    }
+  if (card.cardType === 'uncle_gamal' && state.discardPile.length === 0) {
+    return { valid: false, error: 'الأرشيف فاضي' };
+  }
+
+  if (card.cardType === 'dossier_sort' && state.deck.length === 0) {
+    return { valid: false, error: 'كومة السحب فاضية' };
   }
 
   return { valid: true };
 }
 
-// === Card Effect Execution Functions ===
+// === Card Effect Executions ===
 
-/**
- * Execute system_down: Freeze target player and place system_down card on them
- */
 export function executeSystemDown(
   state: ServerGameState,
   _caster: ServerPlayer,
@@ -238,47 +317,26 @@ export function executeSystemDown(
   addLogEntry(state, `السيستم واقع — ${target.name} هيفوّت دوره!`);
 }
 
-/**
- * Execute come_tomorrow: Move 1 specific physical doc Card from target's file to discard pile
- */
 export function executeComeTomorrow(
   state: ServerGameState,
   _caster: ServerPlayer,
   target: ServerPlayer,
-  targetDoc: DocumentCardType,
-): void {
-  const docIndex = target.fileCards.findIndex(c => c.cardType === targetDoc);
-  if (docIndex === -1) return; // Should not happen after validation
-  const [discardedCard] = target.fileCards.splice(docIndex, 1);
+  targetSlotIndex: number,
+): Card | null {
+  const removed = target.dossierSlots[targetSlotIndex];
+  if (!removed) return null;
+  target.dossierSlots[targetSlotIndex] = null;
+  clearSlotMemoryAcrossPlayers(state.players, target.id, targetSlotIndex, true);
   syncPlayerFile(target);
-  state.discardPile.push(discardedCard);
-  const docDef = CARD_DEFINITIONS[targetDoc];
-  addLogEntry(state, `فوت علينا بكرة — ${docDef.nameAr} اتشالت من ملف ${target.name}!`);
+  state.discardPile.push(removed);
+  target.isImmuneThisRound = true;
+  addLogEntry(
+    state,
+    `فوت علينا بكرة — خانة #${targetSlotIndex + 1} عند ${target.name} (${CARD_DEFINITIONS[removed.cardType].nameAr}) راحت الأرشيف!`,
+  );
+  return removed;
 }
 
-/**
- * Execute missing_papers: Discard 2 random cards from target's hand
- * Returns number of cards actually discarded.
- */
-export function executeMissingPapers(
-  state: ServerGameState,
-  _caster: ServerPlayer,
-  target: ServerPlayer,
-): number {
-  const discardCount = Math.min(2, target.hand.length);
-  for (let i = 0; i < discardCount; i++) {
-    const randomIndex = Math.floor(Math.random() * target.hand.length);
-    const [discarded] = target.hand.splice(randomIndex, 1);
-    state.discardPile.push(discarded);
-  }
-  addLogEntry(state, `ورقك ناقص — ${target.name} رمى ${discardCount} كارت!`);
-  return discardCount;
-}
-
-/**
- * Execute window_4: Swap caster's remaining hand with target's entire hand
- * The played window_4 card is already removed from caster's hand before this.
- */
 export function executeWindow4(
   state: ServerGameState,
   caster: ServerPlayer,
@@ -287,14 +345,9 @@ export function executeWindow4(
   const casterHand = [...caster.hand];
   caster.hand = [...target.hand];
   target.hand = casterHand;
-  addLogEntry(state, `شباك 4 — ${caster.name} بدّل كروته مع ${target.name}!`);
+  addLogEntry(state, `شباك 4 — ${caster.name} بدّل كروت إيده مع ${target.name} (اللي قبله)!`);
 }
 
-/**
- * Execute medhat_vacation: Set global block on manager_sign
- * Keeps the physical medhat_vacation card on the table until caster's next turn.
- * If another medhat_vacation was already active, moves the previous card to discardPile.
- */
 export function executeMedhatVacation(
   state: ServerGameState,
   caster: ServerPlayer,
@@ -305,52 +358,104 @@ export function executeMedhatVacation(
   }
   state.activeMedhatCard = card;
   state.globalEffects.medhatVacationUntilPlayerId = caster.id;
-  addLogEntry(state, `الأستاذ مدحت في إجازة — محدش يقدر ينزل إمضاء المدير!`);
+  addLogEntry(state, `الأستاذ مدحت في إجازة — ممنوع تنزيل إمضاء المدير لفة كاملة!`);
 }
 
-/**
- * Execute file_lost: Return ALL physical doc cards from target's file to target's hand
- * Returns count of returned docs.
- */
 export function executeFileLost(
   state: ServerGameState,
   _caster: ServerPlayer,
   target: ServerPlayer,
-): number {
-  const docsReturned = target.fileCards.length;
-  for (const returnedCard of target.fileCards) {
-    target.hand.push(returnedCard);
+): number[] {
+  const affectedSlots: number[] = [];
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    const slotCard = target.dossierSlots[i];
+    if (slotCard) {
+      target.hand.push(slotCard);
+      target.dossierSlots[i] = null;
+      clearSlotMemoryAcrossPlayers(state.players, target.id, i, true);
+      affectedSlots.push(i);
+    }
   }
-  target.fileCards = [];
   syncPlayerFile(target);
-  addLogEntry(state, `الملف ضاع — كل ورق ${target.name} (${docsReturned}) رجع لإيده!`);
-  return docsReturned;
+  if (affectedSlots.length > 0) {
+    target.isImmuneThisRound = true;
+  }
+  addLogEntry(state, `الملف ضاع — ${affectedSlots.length} ورقات من ملف ${target.name} رجعوا لإيده!`);
+  return affectedSlots;
 }
 
-/**
- * Execute wasta: Steal 1 specific physical doc Card from target's file to caster's file
- */
 export function executeWasta(
   state: ServerGameState,
   caster: ServerPlayer,
   target: ServerPlayer,
-  targetDoc: DocumentCardType,
-): void {
-  if (caster.file.includes(targetDoc)) return;
-  const docIndex = target.fileCards.findIndex(c => c.cardType === targetDoc);
-  if (docIndex === -1) return;
-  const [stolenCard] = target.fileCards.splice(docIndex, 1);
+  targetSlotIndex: number,
+  casterSlotIndex: number,
+): Card | null {
+  const stolen = target.dossierSlots[targetSlotIndex];
+  if (!stolen) return null;
+
+  target.dossierSlots[targetSlotIndex] = null;
+  clearSlotMemoryAcrossPlayers(state.players, target.id, targetSlotIndex, true);
   syncPlayerFile(target);
-  caster.fileCards.push(stolenCard);
+  target.isImmuneThisRound = true;
+
+  const replaced = caster.dossierSlots[casterSlotIndex];
+  if (replaced) {
+    state.discardPile.push(replaced);
+  }
+  caster.dossierSlots[casterSlotIndex] = stolen;
+  clearSlotMemoryAcrossPlayers(state.players, caster.id, casterSlotIndex, false);
+  markSlotSeen(caster, caster.id, casterSlotIndex, stolen.cardType);
   syncPlayerFile(caster);
-  const docDef = CARD_DEFINITIONS[targetDoc];
-  addLogEntry(state, `واسطة — ${caster.name} سرق ${docDef.nameAr} من ملف ${target.name}!`);
+
+  addLogEntry(
+    state,
+    `واسطة — ${caster.name} سرق خانة #${targetSlotIndex + 1} من ${target.name} وحطها في خانته #${casterSlotIndex + 1}!`,
+  );
+  return stolen;
 }
 
-/**
- * Execute recommendation: Draw 3 cards (with reshuffle check each draw)
- * Returns count drawn.
- */
+export function executeDeskSwap(
+  state: ServerGameState,
+  caster: ServerPlayer,
+  target: ServerPlayer,
+  casterSlotIndex: number,
+  targetSlotIndex: number,
+): void {
+  const casterCard = caster.dossierSlots[casterSlotIndex];
+  const targetCard = target.dossierSlots[targetSlotIndex];
+  if (!casterCard || !targetCard) return;
+
+  const casterKnownOfTarget = caster.botMemory[target.id]?.[targetSlotIndex] ?? null;
+  const casterKnownOfOwn = caster.botMemory[caster.id]?.[casterSlotIndex] ?? null;
+
+  caster.dossierSlots[casterSlotIndex] = targetCard;
+  target.dossierSlots[targetSlotIndex] = casterCard;
+
+  // Mark tampered for anyone who had seen these slots (especially target losing their known slot!)
+  clearSlotMemoryAcrossPlayers(state.players, caster.id, casterSlotIndex, true);
+  clearSlotMemoryAcrossPlayers(state.players, target.id, targetSlotIndex, true);
+
+  // Restore caster's accurate memory of what they just swapped
+  caster.tamperedSlotsByPlayer[caster.id]?.delete(casterSlotIndex);
+  caster.tamperedSlotsByPlayer[target.id]?.delete(targetSlotIndex);
+  if (casterKnownOfTarget) {
+    markSlotSeen(caster, caster.id, casterSlotIndex, targetCard.cardType);
+  }
+  if (casterKnownOfOwn) {
+    markSlotSeen(caster, target.id, targetSlotIndex, casterCard.cardType);
+  }
+
+  target.isImmuneThisRound = true;
+  syncPlayerFile(caster);
+  syncPlayerFile(target);
+
+  addLogEntry(
+    state,
+    `تبديل مكاتب — ${caster.name} (خانة #${casterSlotIndex + 1}) بدّل سراً مع ${target.name} (خانة #${targetSlotIndex + 1})!`,
+  );
+}
+
 export function executeRecommendation(
   state: ServerGameState,
   caster: ServerPlayer,
@@ -358,96 +463,4 @@ export function executeRecommendation(
   const drawn = drawCards(state, caster, 3);
   addLogEntry(state, `توصية من فوق — ${caster.name} سحب ${drawn.length} كروت!`);
   return drawn.length;
-}
-
-/**
- * Execute document placement: Place physical document Card in caster's file
- */
-export function executeDocumentPlacement(
-  state: ServerGameState,
-  caster: ServerPlayer,
-  card: Card,
-): boolean {
-  const docType = card.cardType as DocumentCardType;
-  caster.fileCards.push(card);
-  syncPlayerFile(caster);
-  const docDef = CARD_DEFINITIONS[docType];
-  addLogEntry(state, `${caster.name} نزّل ${docDef.nameAr} في ملفه!`);
-
-  // Check for eagle_seal instant win
-  if (docType === 'eagle_seal') {
-    addLogEntry(state, `مبروك يا ${caster.name}! ختمت ورقك ومشيت قبل الزحمة!`);
-    return true; // Signal win
-  }
-  return false;
-}
-
-/**
- * Execute a card effect based on its type.
- * Returns true if the game should end (eagle_seal win).
- */
-export function executeCardEffect(
-  state: ServerGameState,
-  caster: ServerPlayer,
-  card: Card,
-  targetPlayerId?: string,
-  targetDocument?: DocumentCardType,
-): boolean {
-  const target = targetPlayerId
-    ? state.players.find(p => p.id === targetPlayerId)
-    : undefined;
-
-  switch (card.cardType) {
-    case 'system_down':
-      if (target) executeSystemDown(state, caster, target, card);
-      break;
-    case 'come_tomorrow':
-      if (target && targetDocument) executeComeTomorrow(state, caster, target, targetDocument);
-      break;
-    case 'missing_papers':
-      if (target) executeMissingPapers(state, caster, target);
-      break;
-    case 'window_4':
-      if (target) executeWindow4(state, caster, target);
-      break;
-    case 'medhat_vacation':
-      executeMedhatVacation(state, caster, card);
-      break;
-    case 'file_lost':
-      if (target) executeFileLost(state, caster, target);
-      break;
-    case 'wasta':
-      if (target && targetDocument) executeWasta(state, caster, target, targetDocument);
-      break;
-    case 'recommendation':
-      executeRecommendation(state, caster);
-      break;
-    // Documents
-    case 'id_copy':
-    case 'stamp_duty':
-    case 'manager_sign':
-    case 'eagle_seal':
-      return executeDocumentPlacement(state, caster, card);
-    // uncle_gamal is handled separately (PENDING_ARCHIVE phase)
-    // breakfast_break is reaction-only
-    default:
-      break;
-  }
-  return false;
-}
-
-/**
- * Check if playing wasta would result in a win
- * (caster gets the doc that completes their prerequisites + they have eagle_seal in hand)
- */
-export function checkWastaWin(
-  caster: ServerPlayer,
-  targetDoc: DocumentCardType,
-): boolean {
-  // After wasta, caster would have targetDoc in file
-  const futureFile = [...caster.file, targetDoc];
-  // Check if caster has eagle_seal in hand and would have all prerequisites
-  const hasEagleSealInHand = caster.hand.some(c => c.cardType === 'eagle_seal');
-  if (!hasEagleSealInHand) return false;
-  return EAGLE_SEAL_PREREQUISITES.every(doc => futureFile.includes(doc));
 }

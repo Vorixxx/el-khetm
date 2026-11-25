@@ -28,6 +28,8 @@ export const Lobby: React.FC = () => {
   const [logoError, setLogoError] = useState(false);
 
   const canProceed = playerName.trim().length >= 2;
+  const playableAvatars = AVATAR_IDS.filter((a) => a !== 'bot');
+  const bgUrl = getBackground('lobby_mobile');
 
   const handleCreate = () => {
     if (!canProceed) return;
@@ -44,9 +46,6 @@ export const Lobby: React.FC = () => {
     quickPlay(socket, 3);
   };
 
-  const playableAvatars = AVATAR_IDS.filter((a) => a !== 'bot');
-  const bgUrl = getBackground('lobby_mobile');
-
   return (
     <div
       className="h-full w-full flex flex-col items-center justify-center relative overflow-y-auto py-4"
@@ -58,9 +57,8 @@ export const Lobby: React.FC = () => {
       }}
       dir="rtl"
     >
-      {/* Content Panel */}
       <motion.div
-        className="relative z-10 flex flex-col items-center gap-4 w-full max-w-sm mx-4 p-5 sm:p-6 bg-manila/90 backdrop-blur-md rounded-2xl border-2 border-ink shadow-retro-lg"
+        className="relative z-10 flex flex-col items-center gap-3.5 w-full max-w-sm mx-4 p-5 bg-manila/[0.96] rounded-2xl border-2 border-ink shadow-retro-lg"
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -80,22 +78,23 @@ export const Lobby: React.FC = () => {
         >
           {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
+
         {/* Logo & Title */}
-        <div className="flex flex-col items-center gap-1.5">
+        <div className="flex flex-col items-center gap-1">
           {!logoError ? (
             <img
               src={BRANDING.logo}
               alt="الختم"
-              className="w-20 h-20 object-contain drop-shadow"
+              className="w-16 h-16 object-contain drop-shadow"
               onError={() => setLogoError(true)}
             />
           ) : (
-            <div className="w-20 h-20 bg-ink/10 rounded-xl border-2 border-ink flex items-center justify-center">
+            <div className="w-16 h-16 bg-ink/10 rounded-xl border-2 border-ink flex items-center justify-center">
               <span className="text-3xl font-cairo font-black text-ink">🦅</span>
             </div>
           )}
-          <h1 className="text-4xl font-cairo font-black text-ink tracking-tight">الختم</h1>
-          <p className="text-sm font-cairo font-bold text-ink/70">خلّص ورقك قبل الساعة 2 الضهر!</p>
+          <h1 className="text-3xl font-cairo font-black text-ink tracking-tight">الختم</h1>
+          <p className="text-xs font-cairo font-bold text-ink/70">لعبة أوراق المصلحة — ذاكرة، خداع، وختم النسر!</p>
         </div>
 
         {/* Name Input */}
@@ -109,40 +108,45 @@ export const Lobby: React.FC = () => {
             }}
             placeholder="اكتب اسمك هنا..."
             maxLength={14}
-            className="w-full px-4 py-2.5 bg-white border-2 border-ink rounded-lg shadow-retro-sm font-cairo font-bold text-ink text-center placeholder:text-ink/35 focus:outline-none focus:ring-2 focus:ring-ink"
+            className="w-full px-4 py-2 bg-white border-2 border-ink rounded-lg shadow-retro-sm font-cairo font-bold text-ink text-center placeholder:text-ink/35 focus:outline-none focus:ring-2 focus:ring-ink"
             dir="rtl"
           />
         </div>
 
-        {/* Avatar Picker */}
-        <div className="flex gap-3 justify-center">
-          {playableAvatars.map((avId) => (
-            <AvatarButton
-              key={avId}
-              avatarId={avId}
-              isSelected={avatarId === avId}
-              onSelect={() => setAvatarId(avId)}
-            />
-          ))}
+        {/* Avatar Picker (Cosmetic) */}
+        <div className="w-full flex flex-col gap-1.5">
+          <div className="flex gap-2.5 justify-center">
+            {playableAvatars.map((avId) => (
+              <AvatarButton
+                key={avId}
+                avatarId={avId}
+                isSelected={avatarId === avId}
+                onSelect={() => setAvatarId(avId)}
+              />
+            ))}
+          </div>
+          <p className="text-[11px] font-cairo font-bold text-ink/60 text-center">
+            الشخصية المختارة: <span className="text-ink font-black">{AVATAR_LABELS[avatarId]}</span>
+          </p>
         </div>
 
         {/* Action Buttons */}
-        <div className="w-full flex flex-col gap-2.5">
+        <div className="w-full flex flex-col gap-2">
           <button
             onClick={handleQuickPlay}
             disabled={!canProceed}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-wasta-gold text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro active:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:opacity-40 disabled:active:shadow-retro disabled:active:translate-x-0 disabled:active:translate-y-0 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-wasta-gold text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro active:shadow-none disabled:opacity-40 transition-all"
           >
-            <Gamepad2 size={20} />
+            <Gamepad2 size={19} />
             لعب سريع ضد بوتات
           </button>
 
           <button
             onClick={handleCreate}
             disabled={!canProceed}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-doc-green text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro active:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:opacity-40 disabled:active:shadow-retro disabled:active:translate-x-0 disabled:active:translate-y-0 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-doc-green text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro active:shadow-none disabled:opacity-40 transition-all"
           >
-            <Users size={20} />
+            <Users size={19} />
             إنشاء غرفة جديدة
           </button>
 
@@ -150,9 +154,9 @@ export const Lobby: React.FC = () => {
             <button
               onClick={() => setShowCodeInput(true)}
               disabled={!canProceed}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-defense-blue text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro active:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:opacity-40 disabled:active:shadow-retro disabled:active:translate-x-0 disabled:active:translate-y-0 transition-all"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-defense-blue text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro active:shadow-none disabled:opacity-40 transition-all"
             >
-              <LogIn size={20} />
+              <LogIn size={19} />
               دخول غرفة بكود
             </button>
           ) : (
@@ -170,13 +174,13 @@ export const Lobby: React.FC = () => {
                 }}
                 placeholder="كود الغرفة"
                 maxLength={4}
-                className="flex-1 px-3 py-2.5 bg-white border-2 border-ink rounded-lg shadow-retro-sm font-cairo font-bold text-ink text-center tracking-widest uppercase placeholder:text-ink/35 focus:outline-none"
+                className="flex-1 px-3 py-2 bg-white border-2 border-ink rounded-lg shadow-retro-sm font-cairo font-bold text-ink text-center tracking-widest uppercase placeholder:text-ink/35 focus:outline-none"
                 dir="ltr"
               />
               <button
                 onClick={handleJoin}
                 disabled={!canProceed || roomCode.trim().length < 4}
-                className="px-4 py-2.5 bg-defense-blue text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro-sm active:shadow-none disabled:opacity-40 transition-all"
+                className="px-4 py-2 bg-defense-blue text-white font-cairo font-bold rounded-lg border-2 border-ink shadow-retro-sm active:shadow-none disabled:opacity-40 transition-all"
               >
                 دخول
               </button>
@@ -185,18 +189,16 @@ export const Lobby: React.FC = () => {
 
           <button
             onClick={() => openModal('rules')}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-ink font-cairo font-bold rounded-lg border-2 border-ink shadow-retro-sm active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-ink font-cairo font-bold rounded-lg border-2 border-ink shadow-retro-sm active:shadow-none transition-all"
           >
-            <BookOpen size={18} />
-            طريقة اللعب
+            <BookOpen size={17} />
+            طريقة اللعب والقواعد الجديدة
           </button>
         </div>
       </motion.div>
     </div>
   );
 };
-
-// === Avatar Button Sub-Component ===
 
 const AvatarButton: React.FC<{
   avatarId: AvatarId;
@@ -216,7 +218,7 @@ const AvatarButton: React.FC<{
         }`}
       whileTap={{ scale: 0.9 }}
     >
-      <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-ink bg-white">
+      <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-ink bg-white">
         {!imgErr ? (
           <img
             src={getAvatarImage(avatarId)}
@@ -225,11 +227,7 @@ const AvatarButton: React.FC<{
             onError={() => setImgErr(true)}
           />
         ) : (
-          <img
-            src={getAvatarFallback(label)}
-            alt={label}
-            className="w-full h-full"
-          />
+          <img src={getAvatarFallback(label)} alt={label} className="w-full h-full" />
         )}
       </div>
       <span className="text-[11px] font-cairo font-bold text-ink">{label}</span>

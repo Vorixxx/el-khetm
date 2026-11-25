@@ -7,10 +7,12 @@ import type {
   PublicGameState,
   PrivateGameState,
   LobbyState,
-  DocumentCardType,
   SoundEffect,
   AvatarId,
+  Card,
   CardType,
+  DrawSource,
+  PlayCardPayload,
 } from '@el-khetm/shared';
 import type { TypedSocket } from '../hooks/useSocket';
 import { sessionId } from '../hooks/useSocket';
@@ -30,7 +32,12 @@ export type ModalType =
   | 'target'
   | 'reaction'
   | 'archive'
+  | 'sort'
+  | 'target_discard'
   | 'discard'
+  | 'card_counter'
+  | 'card_zoom'
+  | 'stickers'
   | 'rules'
   | 'gameover'
   | null;
@@ -38,8 +45,18 @@ export type ModalType =
 export interface ModalData {
   cardInstanceId?: string;
   cardType?: string;
+  handCard?: Card;
   targetPlayerId?: string;
+  ownSlotIndex?: number;
+  burnCardInstanceId?: string;
 }
+
+export type BoardInteractionMode =
+  | { type: 'place_in_slot'; handCard: Card }
+  | { type: 'match_archive' }
+  | { type: 'burn_card'; card: Card }
+  | { type: 'pick_own_slot'; card: Card; purpose: 'desk_swap' | 'wasta'; burnCardInstanceId?: string }
+  | null;
 
 export interface CardHoverPreview {
   cardType: CardType;
@@ -74,41 +91,34 @@ function saveActiveRoomCode(roomCode: string | null): void {
 // === Store Interface ===
 
 interface GameStore {
-  // Screen
   screen: ScreenState;
   setScreen: (screen: ScreenState) => void;
 
-  // Player identity
   myPlayerId: string | null;
   playerName: string;
   setPlayerName: (name: string) => void;
   avatarId: AvatarId;
   setAvatarId: (id: AvatarId) => void;
 
-  // Sound
   isMuted: boolean;
   toggleMute: () => void;
 
-  // Lobby
   lobbyState: LobbyState | null;
-
-  // Game state
   publicState: PublicGameState | null;
   privateState: PrivateGameState | null;
 
-  // Hover card preview (desktop mouse hover for hand / file / archive)
+  interactionMode: BoardInteractionMode;
+  setInteractionMode: (mode: BoardInteractionMode) => void;
+
   hoveredPreview: CardHoverPreview | null;
   setHoveredPreview: (preview: CardHoverPreview | null) => void;
 
-  // Live Meme Stickers per player (auto-expiring)
   activeStickers: Record<string, { stickerId: string; timestamp: number }>;
 
-  // Toast queue
   toasts: Toast[];
   addToast: (message: string, type: Toast['type']) => void;
   removeToast: (id: string) => void;
 
-  // Modal
   activeModal: ModalType;
   modalData: ModalData;
   openModal: (modal: ModalType, data?: ModalData) => void;
@@ -123,17 +133,22 @@ interface GameStore {
   addBot: (socket: TypedSocket) => void;
   removeBot: (socket: TypedSocket, botId: string) => void;
   startGame: (socket: TypedSocket) => void;
-  playCard: (socket: TypedSocket, cardInstanceId: string, targetPlayerId?: string, targetDocument?: DocumentCardType) => void;
+
+  startPeek: (socket: TypedSocket, slotIndex: number) => void;
+  drawCard: (socket: TypedSocket, source: DrawSource, marketIndex?: number) => void;
+  placeInSlot: (socket: TypedSocket, cardInstanceId: string, slotIndex: number) => void;
+  matchArchive: (socket: TypedSocket, slotIndex: number) => void;
+  closeWindow: (socket: TypedSocket) => void;
+  playCard: (socket: TypedSocket, payload: PlayCardPayload) => void;
+  sortDeck: (socket: TypedSocket, orderedInstanceIds: string[]) => void;
+  targetDiscard: (socket: TypedSocket, cardInstanceIds: string[]) => void;
   endTurn: (socket: TypedSocket) => void;
   react: (socket: TypedSocket, block: boolean) => void;
   pickArchive: (socket: TypedSocket, cardInstanceId: string) => void;
   discardCards: (socket: TypedSocket, cardInstanceIds: string[]) => void;
   sendSticker: (socket: TypedSocket, stickerId: string) => void;
 
-  // Socket listener setup
   setupSocketListeners: (socket: TypedSocket, playSound: (s: SoundEffect) => void) => () => void;
-
-  // Reset
   reset: () => void;
 }
 
@@ -188,6 +203,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   publicState: null,
   privateState: null,
 
+  interactionMode: null,
+  setInteractionMode: (interactionMode) => set({ interactionMode, hoveredPreview: null }),
+
   hoveredPreview: null,
   setHoveredPreview: (hoveredPreview) => set({ hoveredPreview }),
 
@@ -241,39 +259,54 @@ export const useGameStore = create<GameStore>((set, get) => ({
       privateState: null,
       activeModal: null,
       modalData: {},
+      interactionMode: null,
       hoveredPreview: null,
       activeStickers: {},
     });
   },
-  addBot: (socket) => {
-    socket.emit('room:add_bot');
+  addBot: (socket) => { socket.emit('room:add_bot'); },
+  removeBot: (socket, botId) => { socket.emit('room:remove_bot', { botId }); },
+  startGame: (socket) => { socket.emit('room:start_game'); },
+
+  startPeek: (socket, slotIndex) => {
+    socket.emit('action:start_peek', { slotIndex });
   },
-  removeBot: (socket, botId) => {
-    socket.emit('room:remove_bot', { botId });
+  drawCard: (socket, source, marketIndex) => {
+    set({ interactionMode: null, hoveredPreview: null });
+    socket.emit('action:draw_card', { source, marketIndex });
   },
-  startGame: (socket) => {
-    socket.emit('room:start_game');
+  placeInSlot: (socket, cardInstanceId, slotIndex) => {
+    set({ interactionMode: null, hoveredPreview: null });
+    socket.emit('action:place_in_slot', { cardInstanceId, slotIndex });
   },
-  playCard: (socket, cardInstanceId, targetPlayerId, targetDocument) => {
-    socket.emit('action:play_card', { cardInstanceId, targetPlayerId, targetDocument });
+  matchArchive: (socket, slotIndex) => {
+    set({ interactionMode: null, hoveredPreview: null });
+    socket.emit('action:match_archive', { slotIndex });
+  },
+  closeWindow: (socket) => {
+    set({ interactionMode: null, hoveredPreview: null });
+    socket.emit('action:close_window');
+  },
+  playCard: (socket, payload) => {
+    set({ interactionMode: null, hoveredPreview: null });
+    socket.emit('action:play_card', payload);
+  },
+  sortDeck: (socket, orderedInstanceIds) => {
+    socket.emit('action:sort_deck', { orderedInstanceIds });
+  },
+  targetDiscard: (socket, cardInstanceIds) => {
+    socket.emit('action:target_discard', { cardInstanceIds });
   },
   endTurn: (socket) => {
+    set({ interactionMode: null, hoveredPreview: null });
     socket.emit('action:end_turn');
   },
-  react: (socket, block) => {
-    socket.emit('action:react', { block });
-  },
-  pickArchive: (socket, cardInstanceId) => {
-    socket.emit('action:pick_archive', { cardInstanceId });
-  },
-  discardCards: (socket, cardInstanceIds) => {
-    socket.emit('action:discard_cards', { cardInstanceIds });
-  },
-  sendSticker: (socket, stickerId) => {
-    socket.emit('action:send_sticker', { stickerId });
-  },
+  react: (socket, block) => { socket.emit('action:react', { block }); },
+  pickArchive: (socket, cardInstanceId) => { socket.emit('action:pick_archive', { cardInstanceId }); },
+  discardCards: (socket, cardInstanceIds) => { socket.emit('action:discard_cards', { cardInstanceIds }); },
+  sendSticker: (socket, stickerId) => { socket.emit('action:send_sticker', { stickerId }); },
 
-  // === Socket Listener Setup ===
+  // === Socket Listeners ===
 
   setupSocketListeners: (socket, playSound) => {
     const onCreated = (data: { roomCode: string; playerId: string }) => {
@@ -306,40 +339,51 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const prev = get().publicState;
       const myId = get().privateState?.playerId || get().myPlayerId;
 
-      // Guard against stale GAME_OVER broadcast arriving right as player intentionally left to lobby
       if (data.phase === 'GAME_OVER' && get().screen === 'lobby' && !prev) {
         return;
       }
 
       let nextModal = get().activeModal;
       let nextModalData = get().modalData;
+      let nextInteraction = get().interactionMode;
 
-      // Close phase-specific modals if phase changed away from them
+      // Clear turn-bound interaction modes when it's no longer our ACTION_PHASE
+      if (data.phase !== 'ACTION_PHASE' || data.currentTurnPlayerId !== myId) {
+        nextInteraction = null;
+      }
+
+      // Close stale phase modals
       if (nextModal === 'reaction' && data.phase !== 'PENDING_REACTION') {
-        nextModal = null;
-        nextModalData = {};
+        nextModal = null; nextModalData = {};
       }
       if (nextModal === 'archive' && data.phase !== 'PENDING_ARCHIVE') {
-        nextModal = null;
-        nextModalData = {};
+        nextModal = null; nextModalData = {};
+      }
+      if (nextModal === 'sort' && data.phase !== 'PENDING_SORT') {
+        nextModal = null; nextModalData = {};
+      }
+      if (nextModal === 'target_discard' && data.phase !== 'PENDING_TARGET_DISCARD') {
+        nextModal = null; nextModalData = {};
       }
       if (nextModal === 'discard' && data.phase !== 'DISCARD_PHASE') {
-        nextModal = null;
-        nextModalData = {};
+        nextModal = null; nextModalData = {};
       }
       if (nextModal === 'target' && (data.phase !== 'ACTION_PHASE' || data.currentTurnPlayerId !== myId)) {
-        nextModal = null;
-        nextModalData = {};
+        nextModal = null; nextModalData = {};
       }
 
-      // Open phase-specific modals when entered
+      // Open phase modals automatically
       if (data.phase === 'GAME_OVER' && prev?.phase !== 'GAME_OVER') {
         nextModal = 'gameover';
         saveActiveRoomCode(null);
-      } else if (data.phase === 'PENDING_REACTION' && data.pendingReaction && data.pendingReaction.targetId === myId) {
+      } else if (data.phase === 'PENDING_REACTION' && data.pendingReaction?.targetId === myId) {
         nextModal = 'reaction';
-      } else if (data.phase === 'PENDING_ARCHIVE' && data.pendingArchive && data.pendingArchive.playerId === myId) {
+      } else if (data.phase === 'PENDING_ARCHIVE' && data.pendingArchive?.playerId === myId) {
         nextModal = 'archive';
+      } else if (data.phase === 'PENDING_SORT' && data.pendingSort?.playerId === myId) {
+        nextModal = 'sort';
+      } else if (data.phase === 'PENDING_TARGET_DISCARD' && data.pendingTargetDiscard?.targetId === myId) {
+        nextModal = 'target_discard';
       } else if (data.phase === 'DISCARD_PHASE' && data.currentTurnPlayerId === myId) {
         nextModal = 'discard';
       }
@@ -352,6 +396,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         publicState: data,
         activeModal: nextModal,
         modalData: nextModalData,
+        interactionMode: nextInteraction,
       });
     };
 
@@ -359,12 +404,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const pub = get().publicState;
       set({ privateState: data, myPlayerId: data.playerId });
 
-      // Ensure phase modal opens cleanly even if privateState arrived slightly after publicState
       if (pub) {
         if (pub.phase === 'PENDING_REACTION' && pub.pendingReaction?.targetId === data.playerId) {
           set({ activeModal: 'reaction' });
         } else if (pub.phase === 'PENDING_ARCHIVE' && pub.pendingArchive?.playerId === data.playerId) {
           set({ activeModal: 'archive' });
+        } else if (pub.phase === 'PENDING_SORT' && pub.pendingSort?.playerId === data.playerId) {
+          set({ activeModal: 'sort' });
+        } else if (pub.phase === 'PENDING_TARGET_DISCARD' && pub.pendingTargetDiscard?.targetId === data.playerId) {
+          set({ activeModal: 'target_discard' });
         } else if (pub.phase === 'DISCARD_PHASE' && pub.currentTurnPlayerId === data.playerId && data.hand.length > 7) {
           set({ activeModal: 'discard' });
         }
@@ -398,10 +446,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }, 3600);
     };
 
-    const onSocketReconnect = () => {
-      get().reconnectIfActive(socket);
-    };
-
+    const onSocketReconnect = () => { get().reconnectIfActive(socket); };
     const onSocketConnect = () => {
       if (get().screen === 'lobby' && getSavedRoomCode()) {
         get().reconnectIfActive(socket);
@@ -420,10 +465,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     socket.on('game:sticker', onSticker);
     socket.io.on('reconnect', onSocketReconnect);
 
-    // Trigger immediate check if socket is already connected on mount
-    if (socket.connected) {
-      onSocketConnect();
-    }
+    if (socket.connected) onSocketConnect();
 
     return () => {
       socket.off('connect', onSocketConnect);
@@ -450,6 +492,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       toasts: [],
       activeModal: null,
       modalData: {},
+      interactionMode: null,
       hoveredPreview: null,
       activeStickers: {},
     });

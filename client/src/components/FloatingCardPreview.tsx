@@ -17,14 +17,14 @@ export const FloatingCardPreview: React.FC = () => {
   return (
     <AnimatePresence>
       {isVisible && hoveredPreview && def && (
-        <div className="absolute bottom-[285px] inset-x-0 z-40 px-3 flex justify-center pointer-events-none">
+        <div className="absolute bottom-[clamp(215px,33dvh,290px)] inset-x-0 z-40 px-3 flex justify-center pointer-events-none">
           <motion.div
             key={hoveredPreview.cardType}
             initial={{ opacity: 0, scale: 0.9, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 8 }}
             transition={{ duration: 0.14 }}
-            className="flex items-center gap-3 bg-manila/95 backdrop-blur-md rounded-2xl border-2 border-ink shadow-retro-lg p-3 w-full max-w-[385px]"
+            className="flex items-center gap-3 bg-manila/[0.97] rounded-2xl border-2 border-ink shadow-retro-lg p-3 w-full max-w-[385px]"
             dir="rtl"
           >
             <CardComponent cardType={hoveredPreview.cardType} size="preview" />

@@ -1,31 +1,67 @@
 // ========================
-// EL-KHETM — Opponent Seat Around the Table (9:16 Skrew-Inspired Seating)
+// EL-KHETM — Opponent Seat Around the Circular Table (Highlights + Anti-Spam Shield + Multi-Peek)
 // ========================
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Snowflake, WifiOff, Bot } from 'lucide-react';
+import { Snowflake, WifiOff, Bot, Eye, Shield, AlertTriangle } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
-import { getAvatarImage, getAvatarFallback, getCardBack, getCardImage, getStickerImage } from '../config/assets';
-import { CORE_DOCUMENTS, CARD_DEFINITIONS, MEME_STICKERS } from '@el-khetm/shared';
+import { getAvatarImage, getAvatarFallback, getStickerImage } from '../config/assets';
+import { MEME_STICKERS, AVATAR_LABELS } from '@el-khetm/shared';
 import type { AvatarId, PublicPlayer, GameEventNotice } from '@el-khetm/shared';
+import { FlipCard } from './Card';
 
 interface OpponentSeatProps {
   player: PublicPlayer;
   isCurrentTurn: boolean;
+  turnExpiresAt: number | null;
   position: 'top' | 'left' | 'right';
   lastEvent: GameEventNotice | null;
 }
 
-export const OpponentSeat: React.FC<OpponentSeatProps> = ({
+const TurnTimerPill: React.FC<{ expiresAt: number | null }> = ({ expiresAt }) => {
+  const [turnSec, setTurnSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!expiresAt) {
+      setTurnSec(null);
+      return;
+    }
+    const tick = () => setTurnSec(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 350);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  return (
+    <span className="absolute -top-1.5 -right-1.5 bg-ink text-wasta-gold text-[8.5px] font-cairo font-black px-1 rounded-full border border-wasta-gold shadow-sm">
+      {turnSec !== null ? turnSec : '●'}
+    </span>
+  );
+};
+
+export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
   player,
   isCurrentTurn,
+  turnExpiresAt,
   position,
   lastEvent,
 }) => {
-  const { setHoveredPreview, activeStickers } = useGameStore();
+  const activeSticker = useGameStore(s => s.activeStickers[player.id] ?? null);
+  const privateState = useGameStore(s => s.privateState);
+  const phase = useGameStore(s => s.publicState?.phase);
+  const windowClosedByPlayerId = useGameStore(s => s.publicState?.windowClosedByPlayerId);
+  const recentSlotHighlights = useGameStore(s => s.publicState?.recentSlotHighlights);
   const [activeBubble, setActiveBubble] = useState<string | null>(null);
-  const activeSticker = activeStickers[player.id] ?? null;
+
+  const activePeek = privateState?.activePeek ?? null;
+  const activeMultiPeek = privateState?.activeMultiPeek ?? null;
+  const seenList = privateState?.seenSlotsByPlayer?.[player.id] ?? [];
+  const tamperedList = privateState?.tamperedSlotsByPlayer?.[player.id] ?? [];
+  const isGameOver = phase === 'GAME_OVER';
+  const highlights = (recentSlotHighlights ?? []).filter(
+    h => h.playerId === player.id && h.expiresAt > Date.now(),
+  );
 
   useEffect(() => {
     if (!lastEvent) return;
@@ -37,49 +73,48 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = ({
     }
     if (!msg) return;
     setActiveBubble(msg);
-    const t = setTimeout(() => setActiveBubble(null), 3500);
+    const t = setTimeout(() => setActiveBubble(null), 3400);
     return () => clearTimeout(t);
   }, [lastEvent?.id, player.id]);
 
   const isSide = position === 'left' || position === 'right';
-  const maxVisibleBacks = isSide ? 5 : 6;
-  const visibleBackCount = Math.min(player.handCount, maxVisibleBacks);
   const stickerMeta = activeSticker ? MEME_STICKERS.find(s => s.id === activeSticker.stickerId) : null;
+  const isCloser = windowClosedByPlayerId === player.id;
 
   return (
     <div
-      className={`relative flex flex-col items-center gap-1 select-none ${
-        isSide ? 'w-[78px]' : 'max-w-[290px]'
+      className={`relative flex flex-col items-center gap-0.5 select-none ${
+        isSide ? 'w-[clamp(58px,16.5vw,82px)]' : 'max-w-[290px]'
       }`}
       dir="rtl"
     >
-      {/* Meme Sticker Comic Bubble (opens clearly in open space without Framer translate conflicts) */}
+      {/* Compact Sticker Badge anchored cleanly at avatar corner */}
       <AnimatePresence>
         {activeSticker && (
           <div
             className={`absolute z-30 pointer-events-none flex ${
               position === 'top'
-                ? 'top-full mt-1 inset-x-0 justify-center'
+                ? 'top-0 -left-12 sm:-left-14'
                 : position === 'right'
-                ? 'bottom-full mb-1 right-0'
-                : 'bottom-full mb-1 left-0'
+                ? '-top-3 right-0'
+                : '-top-3 left-0'
             }`}
           >
             <motion.div
               key={`sticker-${activeSticker.timestamp}`}
-              initial={{ opacity: 0, scale: 0.4, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.4 }}
               transition={{ type: 'spring', stiffness: 420, damping: 20 }}
-              className="bg-white border-2 border-ink rounded-2xl shadow-retro p-1 flex flex-col items-center"
+              className="bg-white border-2 border-ink rounded-xl shadow-retro-sm p-1 flex flex-col items-center"
             >
               <img
                 src={getStickerImage(activeSticker.stickerId)}
                 alt={stickerMeta?.labelAr || 'ميم'}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-contain bg-white"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg object-contain bg-white"
               />
               {stickerMeta && (
-                <span className="text-[10px] font-cairo font-black text-ink px-1 whitespace-nowrap">
+                <span className="text-[8.5px] font-cairo font-black text-ink px-0.5 whitespace-nowrap leading-tight">
                   {stickerMeta.labelAr}
                 </span>
               )}
@@ -88,16 +123,16 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Action Speech Bubble (never truncated or overlapping Deck/Archive) */}
+      {/* Action Speech Bubble */}
       <AnimatePresence>
         {activeBubble && !activeSticker && (
           <div
             className={`absolute z-30 pointer-events-none flex ${
               position === 'top'
-                ? 'top-full mt-1 inset-x-0 justify-center'
+                ? 'top-full mt-0.5 inset-x-0 justify-center'
                 : position === 'right'
-                ? 'bottom-full mb-1 right-0'
-                : 'bottom-full mb-1 left-0'
+                ? 'bottom-full mb-0.5 right-0'
+                : 'bottom-full mb-0.5 left-0'
             }`}
           >
             <motion.div
@@ -105,7 +140,7 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = ({
               initial={{ opacity: 0, scale: 0.7, y: 4 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.7 }}
-              className="whitespace-nowrap bg-white text-ink text-[10px] sm:text-[11px] font-cairo font-black px-2.5 py-0.5 rounded-full border-2 border-ink shadow-retro-sm"
+              className="whitespace-nowrap bg-white text-ink text-[9.5px] font-cairo font-black px-2 py-0.5 rounded-full border-2 border-ink shadow-retro-sm"
             >
               {activeBubble}
             </motion.div>
@@ -113,19 +148,23 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Player Avatar + Name Badge (stacked for side seats so full name is never cut to 1 letter) */}
+      {/* Avatar + Name + Turn / Immunity Badge */}
       <motion.div
-        animate={player.isFrozen ? { scale: [1, 0.97, 1] } : {}}
-        className={`flex items-center px-2 py-1 rounded-xl border-2 transition-all w-full justify-center ${
+        animate={player.isFrozen ? { scale: [1, 0.96, 1] } : {}}
+        className={`flex items-center px-1.5 py-0.5 rounded-xl border-2 transition-all w-full justify-center ${
           isSide ? 'flex-col gap-0.5' : 'gap-1.5'
         } ${
           isCurrentTurn
-            ? 'border-doc-green bg-white shadow-retro ring-2 ring-doc-green/45'
+            ? 'border-wasta-gold bg-white shadow-retro ring-2 ring-wasta-gold/55'
+            : isCloser
+            ? 'border-prank-red bg-white shadow-retro-sm ring-2 ring-prank-red/35'
+            : player.isImmuneThisRound
+            ? 'border-defense-blue bg-blue-50/90 shadow-retro-sm'
             : 'border-ink bg-manila/95 shadow-retro-sm'
         } ${player.isFrozen ? 'ring-2 ring-defense-blue bg-blue-50/90' : ''}`}
       >
         <div className="relative flex-shrink-0">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border border-ink bg-white">
+          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden border border-ink bg-white">
             <img
               src={getAvatarImage(player.avatarId as AvatarId)}
               alt={player.name}
@@ -133,181 +172,140 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = ({
               onError={(e) => { (e.target as HTMLImageElement).src = getAvatarFallback(player.name); }}
             />
           </div>
-          {isCurrentTurn && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-doc-green border border-white animate-ping" />
+          {isCurrentTurn && <TurnTimerPill expiresAt={turnExpiresAt} />}
+          {player.isImmuneThisRound && !isCurrentTurn && (
+            <span
+              className="absolute -top-1.5 -left-1.5 bg-defense-blue text-white rounded-full p-0.5 border border-white shadow-sm"
+              title="محصّن من المقالب لحد ما ييجي دوره"
+            >
+              <Shield size={8} />
+            </span>
           )}
           {player.isFrozen && (
             <span className="absolute -bottom-1 -right-1 bg-defense-blue text-white rounded-full p-0.5 border border-white">
-              <Snowflake size={9} />
+              <Snowflake size={8} />
             </span>
           )}
           {!player.isFrozen && player.isDisconnected && (
             <span className="absolute -bottom-1 -right-1 bg-prank-red text-white rounded-full p-0.5 border border-white">
-              <WifiOff size={9} />
+              <WifiOff size={8} />
             </span>
           )}
           {!player.isFrozen && !player.isDisconnected && player.isBot && (
             <span className="absolute -bottom-1 -right-1 bg-manila border border-ink/50 text-ink rounded-full p-0.5">
-              <Bot size={8} />
+              <Bot size={7} />
             </span>
           )}
         </div>
 
         <div className={`flex flex-col min-w-0 leading-tight ${isSide ? 'w-full items-center text-center' : ''}`}>
-          <span className="text-[11px] font-cairo font-extrabold text-ink truncate max-w-full">
+          <span className="text-[10px] font-cairo font-extrabold text-ink truncate max-w-full">
             {player.name}
           </span>
-          <span className="text-[9.5px] font-cairo font-bold text-ink/70 whitespace-nowrap">
-            {player.isFrozen ? '❄️ متجمد' : isCurrentTurn ? 'يلعب الآن' : `${player.file.length}/4`}
-          </span>
+          <div className="flex items-center gap-0.5 text-[8.5px] font-cairo font-bold text-ink/70 whitespace-nowrap">
+            <span>🃏{player.handCount}</span>
+            <span>·</span>
+            <span>
+              {isCloser
+                ? '🚨قفل'
+                : player.isFrozen
+                ? '❄️'
+                : player.isImmuneThisRound
+                ? '🛡️محصّن'
+                : AVATAR_LABELS[player.avatarId as AvatarId] || 'لاعب'}
+            </span>
+          </div>
         </div>
       </motion.div>
 
-      {/* Face-Down Cards + Public File (Top sits side-by-side compactly so it never overlaps Deck) */}
-      {isSide ? (
-        <>
-          <div className="flex flex-col items-center gap-0.5 relative py-0.5" title={`كروت ${player.name}: ${player.handCount}`}>
-            {player.handCount > 0 ? (
-              <>
-                <div className="flex flex-col items-center">
-                  {Array.from({ length: visibleBackCount }).map((_, idx) => (
-                    <div
-                      key={idx}
-                      className="w-14 h-9 rounded-md border border-ink shadow-sm overflow-hidden bg-[#5C1221] flex items-center justify-center relative"
-                      style={{
-                        marginTop: idx === 0 ? 0 : -11,
-                        zIndex: idx + 1,
-                      }}
+      {/* Responsive 4-Card Dossier with Live Change Highlights */}
+      <div
+        className={
+          isSide
+            ? 'flex flex-col items-center gap-[clamp(2px,0.4dvh,4px)] py-0.5'
+            : 'flex items-center justify-center gap-1 py-0.5'
+        }
+      >
+        {player.dossierSlots.map((slot, idx) => {
+          const singleMatch = activePeek?.targetPlayerId === player.id && activePeek.slotIndex === idx;
+          const multiMatch = activeMultiPeek?.find(m => m.targetPlayerId === player.id && m.slotIndex === idx);
+          const revealedCardType = isGameOver
+            ? slot.revealedCard?.cardType
+            : singleMatch
+            ? activePeek?.card.cardType
+            : multiMatch?.card.cardType ?? null;
+          const isRevealed = Boolean(revealedCardType);
+          const wasSeenByMe = seenList.includes(idx);
+          const wasTampered = tamperedList.includes(idx);
+          const slotHighlight = highlights.find(h => h.slotIndex === idx);
+
+          const slotClass = isSide
+            ? 'w-[clamp(42px,12.5vw,56px)] h-[clamp(28px,4.1dvh,38px)]'
+            : 'w-[clamp(36px,10.5vw,48px)] aspect-[3/4]';
+
+          return (
+            <motion.div
+              key={`slot-${idx}`}
+              animate={slotHighlight ? { scale: [1, 1.14, 1], rotate: [0, -5, 5, 0] } : {}}
+              transition={{ duration: 0.45 }}
+              className="relative"
+            >
+              {!slot.hasCard ? (
+                <div
+                  className={`${slotClass} rounded-md border border-dashed ${
+                    slotHighlight ? 'border-prank-red bg-prank-red/20 ring-2 ring-prank-red' : 'border-ink/30 bg-manila/40'
+                  } flex items-center justify-center`}
+                >
+                  <span className="text-[8px] font-cairo font-bold text-ink/40">#{idx + 1}</span>
+                </div>
+              ) : (
+                <FlipCard
+                  cardType={revealedCardType}
+                  isRevealed={isRevealed}
+                  horizontalSide={isSide}
+                  isHighlighted={singleMatch || Boolean(multiMatch) || Boolean(slotHighlight)}
+                  sizeClass={slotClass}
+                >
+                  <span className="absolute top-0.5 right-0.5 bg-ink/80 text-white text-[7.5px] font-cairo font-black px-1 rounded pointer-events-none z-20">
+                    {idx + 1}
+                  </span>
+                  {wasSeenByMe && !isRevealed && !wasTampered && (
+                    <span
+                      className="absolute bottom-0.5 left-0.5 bg-defense-blue text-white rounded-full p-0.5 border border-white z-20"
+                      title="سبق وشفت الخانة دي"
                     >
-                      <img
-                        src={getCardBack()}
-                        alt=""
-                        className="h-14 w-9 object-cover rotate-90 flex-shrink-0"
-                        draggable={false}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <span className="bg-ink text-white text-[10px] font-cairo font-extrabold px-2 py-0 rounded-full border border-manila shadow-sm">
-                  {player.handCount}
-                </span>
-              </>
-            ) : (
-              <span className="text-[9.5px] font-cairo font-bold text-ink/65 bg-manila/80 px-2 py-0.5 rounded">0</span>
-            )}
-          </div>
-
-          <div className="flex items-center justify-center gap-0.5 bg-manila/90 px-1 py-0.5 rounded-md border border-ink/35 shadow-sm">
-            {CORE_DOCUMENTS.map(doc => {
-              const hasDoc = player.file.includes(doc);
-              const docDef = CARD_DEFINITIONS[doc];
-              return (
-                <div
-                  key={doc}
-                  onPointerEnter={(e) => {
-                    if (e.pointerType !== 'touch' && hasDoc) {
-                      setHoveredPreview({
-                        cardType: doc,
-                        badgeText: `ملف ${player.name}`,
-                        statusText: 'ورقة مكشوفة في ملفه',
-                        isError: false,
-                      });
-                    }
-                  }}
-                  onPointerLeave={() => setHoveredPreview(null)}
-                  className={`w-[1.1rem] h-6 rounded border overflow-hidden transition-transform ${
-                    hasDoc
-                      ? 'border-doc-green bg-white shadow-sm hover:scale-125 cursor-help'
-                      : 'border-dashed border-ink/30 bg-white/45'
-                  }`}
-                  title={`${docDef.nameAr}${hasDoc ? ' ✓' : ' (ناقص)'}`}
-                >
-                  {hasDoc && (
-                    <img
-                      src={getCardImage(doc)}
-                      alt={docDef.nameAr}
-                      className="w-full h-full object-cover"
-                      draggable={false}
-                    />
+                      <Eye size={7} />
+                    </span>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <div className="flex items-center justify-center gap-2.5 py-0.5">
-          {/* Card backs */}
-          <div className="flex items-center justify-center relative" title={`كروت ${player.name}: ${player.handCount}`}>
-            {player.handCount > 0 ? (
-              <div className="flex items-center justify-center" dir="ltr">
-                {Array.from({ length: visibleBackCount }).map((_, idx) => (
-                  <div
-                    key={idx}
-                    className="w-9 sm:w-10 aspect-[3/4] rounded border border-ink shadow-sm overflow-hidden bg-[#5C1221] flex-shrink-0"
-                    style={{
-                      marginLeft: idx === 0 ? 0 : -11,
-                      transform: `rotate(${(idx - (visibleBackCount - 1) / 2) * 2.5}deg)`,
-                      zIndex: idx + 1,
-                    }}
-                  >
-                    <img
-                      src={getCardBack()}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      draggable={false}
-                    />
-                  </div>
-                ))}
-                <span className="mr-1 ml-1 bg-ink text-white text-[10px] font-cairo font-extrabold px-1.5 py-0 rounded-full border border-manila shadow-sm z-20">
-                  {player.handCount}
-                </span>
-              </div>
-            ) : (
-              <span className="text-[10px] font-cairo font-bold text-ink/60 bg-manila/75 px-2 py-0.5 rounded">0 كارت</span>
-            )}
-          </div>
-
-          {/* 4 Public Docs beside top hand */}
-          <div className="flex items-center justify-center gap-1 bg-manila/90 px-1.5 py-1 rounded-lg border border-ink/35 shadow-sm">
-            {CORE_DOCUMENTS.map(doc => {
-              const hasDoc = player.file.includes(doc);
-              const docDef = CARD_DEFINITIONS[doc];
-              return (
-                <div
-                  key={doc}
-                  onPointerEnter={(e) => {
-                    if (e.pointerType !== 'touch' && hasDoc) {
-                      setHoveredPreview({
-                        cardType: doc,
-                        badgeText: `ملف ${player.name}`,
-                        statusText: 'ورقة مكشوفة في ملفه',
-                        isError: false,
-                      });
-                    }
-                  }}
-                  onPointerLeave={() => setHoveredPreview(null)}
-                  className={`w-5 h-7 sm:w-6 sm:h-8 rounded border overflow-hidden transition-transform ${
-                    hasDoc
-                      ? 'border-doc-green bg-white shadow-sm hover:scale-125 cursor-help'
-                      : 'border-dashed border-ink/30 bg-white/45'
-                  }`}
-                  title={`${docDef.nameAr}${hasDoc ? ' ✓' : ' (ناقص)'}`}
-                >
-                  {hasDoc && (
-                    <img
-                      src={getCardImage(doc)}
-                      alt={docDef.nameAr}
-                      className="w-full h-full object-cover"
-                      draggable={false}
-                    />
+                  {wasTampered && !isRevealed && (
+                    <span
+                      className="absolute bottom-0.5 left-0.5 bg-wasta-gold text-ink rounded-full p-0.5 border border-ink z-20"
+                      title="اتبدلت — مش نفس الورقة القديمة!"
+                    >
+                      <AlertTriangle size={7} />
+                    </span>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                </FlipCard>
+              )}
+
+              {/* Live Highlight Label Pill (🔁 اتبدلت / 🤝 اتسرقت / 💥 اتشالت) */}
+              {slotHighlight && (
+                <span
+                  className={`pointer-events-none absolute -top-2 inset-x-0 mx-auto w-max px-1 py-0 rounded-full text-[7.5px] font-cairo font-black border border-ink shadow-sm z-30 animate-bounce ${
+                    slotHighlight.kind === 'removed'
+                      ? 'bg-prank-red text-white'
+                      : slotHighlight.kind === 'peeked'
+                      ? 'bg-defense-blue text-white'
+                      : 'bg-wasta-gold text-ink'
+                  }`}
+                >
+                  {slotHighlight.labelAr}
+                </span>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
-};
+});

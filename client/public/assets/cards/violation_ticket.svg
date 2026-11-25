@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="510" height="683" viewBox="0 0 510 683">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F7F1E3"/>
+      <stop offset="100%" stop-color="#E5D5C3"/>
+    </linearGradient>
+    <linearGradient id="redDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7F1D1D"/>
+      <stop offset="100%" stop-color="#450A0A"/>
+    </linearGradient>
+  </defs>
+  <rect width="510" height="683" rx="26" fill="url(#bg4)"/>
+  <rect x="14" y="14" width="482" height="655" rx="18" fill="none" stroke="#1E293B" stroke-width="5"/>
+  <rect x="24" y="24" width="462" height="635" rx="14" fill="none" stroke="#991B1B" stroke-width="3"/>
+
+  <!-- Top Ribbon -->
+  <rect x="44" y="40" width="422" height="84" rx="14" fill="url(#redDark)" stroke="#1E293B" stroke-width="4"/>
+  <rect x="52" y="47" width="406" height="70" rx="10" fill="none" stroke="#FCA5A5" stroke-width="2" opacity="0.6"/>
+  <text x="255" y="95" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="36" font-weight="900" fill="#FFFDF7" direction="rtl">محضر مخالفة</text>
+  <rect x="165" y="112" width="180" height="30" rx="15" fill="#FEE2E2" stroke="#991B1B" stroke-width="3"/>
+  <text x="255" y="133" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="16" font-weight="900" fill="#991B1B" direction="rtl">عقوبة -10 نقط</text>
+
+  <!-- Center Ticket Scene -->
+  <rect x="44" y="154" width="422" height="392" rx="16" fill="#2A1C16" stroke="#1E293B" stroke-width="4"/>
+  <circle cx="255" cy="350" r="145" fill="#B91C1C" opacity="0.18"/>
+
+  <!-- Official Penalty Sheet -->
+  <g transform="translate(115,195) rotate(-5)">
+    <rect width="275" height="315" rx="10" fill="#FFFBEB" stroke="#1E293B" stroke-width="4"/>
+    <rect x="0" y="0" width="275" height="48" rx="10" fill="#991B1B"/>
+    <text x="137" y="33" text-anchor="middle" font-family="Cairo, Arial" font-size="22" font-weight="900" fill="#FFF">مخالفة إدارية</text>
+    <!-- Lines -->
+    <rect x="28" y="75" width="218" height="10" rx="4" fill="#1E293B" opacity="0.25"/>
+    <rect x="58" y="100" width="188" height="10" rx="4" fill="#1E293B" opacity="0.25"/>
+    <rect x="28" y="125" width="218" height="10" rx="4" fill="#1E293B" opacity="0.25"/>
+    <!-- Big -10 Badge -->
+    <circle cx="137" cy="212" r="56" fill="#FEE2E2" stroke="#B91C1C" stroke-width="6"/>
+    <text x="137" y="228" text-anchor="middle" font-family="Cairo, Arial" font-size="48" font-weight="900" fill="#B91C1C" dir="ltr">-10</text>
+  </g>
+
+  <!-- Angled Red Stamp -->
+  <g transform="translate(185,412) rotate(-14)">
+    <rect width="180" height="58" rx="8" fill="#FFF" fill-opacity="0.9" stroke="#DC2626" stroke-width="5"/>
+    <text x="90" y="40" text-anchor="middle" font-family="Cairo, Arial" font-size="28" font-weight="900" fill="#DC2626" direction="rtl">غرامة!</text>
+  </g>
+
+  <!-- Bottom Scroll -->
+  <rect x="44" y="562" width="422" height="80" rx="14" fill="#FFFDF7" stroke="#1E293B" stroke-width="4"/>
+  <rect x="52" y="569" width="406" height="66" rx="10" fill="none" stroke="#991B1B" stroke-width="2"/>
+  <text x="255" y="598" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="21" font-weight="800" fill="#1E293B" direction="rtl">تخصم 10 نقط في نهاية الجيم</text>
+  <text x="255" y="624" text-anchor="middle" font-family="Cairo, Tahoma, Arial, sans-serif" font-size="19" font-weight="800" fill="#B91C1C" direction="rtl">تخلّص منها أو ازرعها لخصم!</text>
+</svg>

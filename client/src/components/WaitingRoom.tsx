@@ -56,7 +56,7 @@ export const WaitingRoom: React.FC = () => {
       dir="rtl"
     >
       <motion.div
-        className="w-full max-w-sm flex flex-col items-center gap-4 bg-manila/90 backdrop-blur-md p-5 rounded-2xl border-2 border-ink shadow-retro-lg"
+        className="w-full max-w-sm flex flex-col items-center gap-4 bg-manila/[0.96] p-5 rounded-2xl border-2 border-ink shadow-retro-lg"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >

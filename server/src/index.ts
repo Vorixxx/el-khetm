@@ -79,10 +79,31 @@ app.use((req, res, next) => {
   return res.send(cached.data);
 });
 
-app.use(express.static(clientDistDir, { maxAge: '1h', index: 'index.html' }));
+app.use(express.static(clientDistDir, {
+  maxAge: '1d',
+  index: 'index.html',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (/assets[\\/]index-.*\.(js|css)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 
 // Setup socket handlers
 setupSocketHandler(io, roomManager);
+
+// SPA fallback for client routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/socket.io') || req.path === '/health') return next();
+  const indexFile = path.join(clientDistDir, 'index.html');
+  if (fs.existsSync(indexFile)) {
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.sendFile(indexFile);
+  }
+  return next();
+});
 
 httpServer.listen(PORT, () => {
   console.log(`🏛️  El-Khetm Server running on port ${PORT}`);

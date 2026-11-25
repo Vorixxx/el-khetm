@@ -1,35 +1,48 @@
 // ========================
-// EL-KHETM — Player File (Bottom Seat Dossier + Meme Sticker Picker & Comic Bubble)
+// EL-KHETM — Player Bottom Seat (Highlights + Tampered Memory Warnings + Immunity + Stickers)
 // ========================
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Snowflake, X, MessageSquare } from 'lucide-react';
+import { Snowflake, MessageSquare, Eye, ShieldAlert, Shield, AlertTriangle } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
-import { CORE_DOCUMENTS, CARD_DEFINITIONS, MEME_STICKERS } from '@el-khetm/shared';
-import type { AvatarId, DocumentCardType } from '@el-khetm/shared';
-import { getCardImage, getCardFallbackSvg, getAvatarImage, getAvatarFallback, getStickerImage } from '../config/assets';
-import { Card as CardComponent } from './Card';
-
-const DOC_LABELS: Record<DocumentCardType, string> = {
-  id_copy: 'البطاقة',
-  stamp_duty: 'الدمغة',
-  manager_sign: 'الإمضاء',
-  eagle_seal: 'الختم',
-};
+import {
+  CARD_DEFINITIONS,
+  MEME_STICKERS,
+  SLOT_LABELS_AR,
+  AVATAR_LABELS,
+} from '@el-khetm/shared';
+import type { AvatarId } from '@el-khetm/shared';
+import { getAvatarImage, getAvatarFallback, getStickerImage } from '../config/assets';
+import { FlipCard } from './Card';
 
 export const PlayerFile: React.FC = () => {
   const { socket } = useSocket();
-  const { publicState, privateState, myPlayerId, setHoveredPreview, activeStickers, sendSticker } = useGameStore();
-  const [inspectedDoc, setInspectedDoc] = useState<DocumentCardType | null>(null);
+  const {
+    publicState,
+    privateState,
+    myPlayerId,
+    activeStickers,
+    interactionMode,
+    setInteractionMode,
+    startPeek,
+    placeInSlot,
+    matchArchive,
+    openModal,
+  } = useGameStore();
+
   const [myBubble, setMyBubble] = useState<string | null>(null);
-  const [showStickerPicker, setShowStickerPicker] = useState(false);
 
   const myId = privateState?.playerId || myPlayerId || '';
   const lastEvent = publicState?.lastEvent ?? null;
   const mySticker = myId ? activeStickers[myId] : null;
   const stickerMeta = mySticker ? MEME_STICKERS.find(s => s.id === mySticker.stickerId) : null;
+  const activePeek = privateState?.activePeek ?? null;
+  const activeMultiPeek = privateState?.activeMultiPeek ?? null;
+  const mySeenSlots = privateState?.seenSlotsByPlayer?.[myId] ?? [];
+  const myTamperedSlots = privateState?.tamperedSlotsByPlayer?.[myId] ?? [];
+  const startPeeksRemaining = privateState?.startPeeksRemaining ?? 0;
 
   useEffect(() => {
     if (!lastEvent || !myId) return;
@@ -41,7 +54,7 @@ export const PlayerFile: React.FC = () => {
     }
     if (!msg) return;
     setMyBubble(msg);
-    const t = setTimeout(() => setMyBubble(null), 3500);
+    const t = setTimeout(() => setMyBubble(null), 3400);
     return () => clearTimeout(t);
   }, [lastEvent?.id, myId]);
 
@@ -50,257 +63,278 @@ export const PlayerFile: React.FC = () => {
   const myPlayer = publicState.players.find(p => p.id === myId);
   if (!myPlayer) return null;
 
-  const handleHoverEnter = (doc: DocumentCardType, isFilled: boolean, e: React.PointerEvent) => {
-    if (e.pointerType === 'touch') return;
-    setHoveredPreview({
-      cardType: doc,
-      badgeText: isFilled ? 'في ملفك الشخصي ✓' : 'ورقة مطلوبة للملف',
-      statusText: isFilled ? 'مستند مكتمل في ملفك!' : 'محتاج تنزّل الورقة دي في ملفك',
-      isError: !isFilled,
-    });
+  const isPeekStart = publicState.phase === 'PEEK_START' && startPeeksRemaining > 0;
+  const isGameOver = publicState.phase === 'GAME_OVER';
+  const isMyTurnAction =
+    publicState.phase === 'ACTION_PHASE' && publicState.currentTurnPlayerId === myId;
+
+  const myHighlights = (publicState.recentSlotHighlights ?? []).filter(
+    h => h.playerId === myId && h.expiresAt > Date.now(),
+  );
+
+  const handleSlotTap = (slotIndex: number, hasCard: boolean) => {
+    if (isPeekStart && hasCard && !mySeenSlots.includes(slotIndex)) {
+      startPeek(socket, slotIndex);
+      return;
+    }
+    if (!isMyTurnAction || !interactionMode) return;
+
+    if (interactionMode.type === 'place_in_slot') {
+      placeInSlot(socket, interactionMode.handCard.instanceId, slotIndex);
+      return;
+    }
+    if (interactionMode.type === 'match_archive') {
+      if (!hasCard) return;
+      matchArchive(socket, slotIndex);
+      return;
+    }
+    if (interactionMode.type === 'pick_own_slot') {
+      if (interactionMode.purpose === 'desk_swap' && !hasCard) return;
+      const { card, burnCardInstanceId } = interactionMode;
+      setInteractionMode(null);
+      openModal('target', {
+        cardInstanceId: card.instanceId,
+        cardType: card.cardType,
+        ownSlotIndex: slotIndex,
+        burnCardInstanceId,
+      });
+    }
   };
 
+  const promptText = interactionMode?.type === 'place_in_slot'
+    ? `🗂️ اضغط على خانة (١–٤) عشان تنزّل «${CARD_DEFINITIONS[interactionMode.handCard.cardType].nameAr}» سراً`
+    : interactionMode?.type === 'match_archive'
+    ? '🎯 اضغط على الخانة اللي فاكر فيها نفس كارت الأرشيف!'
+    : interactionMode?.type === 'pick_own_slot'
+    ? `🔁 اختار الأول الخانة من ملفك اللي هتستخدمها في «${CARD_DEFINITIONS[interactionMode.card.cardType].nameAr}»`
+    : null;
+
   return (
-    <>
-      <div className="relative w-full flex flex-col items-center gap-1 px-2.5 py-1.5 bg-[#EFE6D2]/95 backdrop-blur-sm rounded-xl border-2 border-ink shadow-retro-sm">
-        {/* Comic Meme Sticker Bubble */}
-        <AnimatePresence>
-          {mySticker && (
-            <motion.div
-              key={`my-sticker-${mySticker.timestamp}`}
-              initial={{ opacity: 0, scale: 0.4, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.4 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 20 }}
-              className="absolute bottom-full mb-1.5 right-3 z-30 pointer-events-none bg-white border-2 border-ink rounded-2xl shadow-retro p-1.5 flex flex-col items-center"
-            >
-              <img
-                src={getStickerImage(mySticker.stickerId)}
-                alt={stickerMeta?.labelAr || 'ميم'}
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-contain bg-white"
-              />
-              {stickerMeta && (
-                <span className="text-xs font-cairo font-black text-ink px-1">
-                  {stickerMeta.labelAr}
-                </span>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Action speech bubble */}
-        <AnimatePresence>
-          {myBubble && !mySticker && (
-            <div className="absolute -top-7 inset-x-0 z-30 flex justify-center pointer-events-none">
-              <motion.div
-                key={myBubble}
-                initial={{ opacity: 0, scale: 0.75, y: 6 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.75 }}
-                className="whitespace-nowrap bg-white text-ink text-xs font-cairo font-black px-3 py-0.5 rounded-full border-2 border-ink shadow-retro-sm"
-              >
-                {myBubble}
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* Global Meme Sticker Picker Popover */}
-        <AnimatePresence>
-          {showStickerPicker && (
-            <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.95 }}
-              className="absolute bottom-full mb-2 left-0 right-0 z-40 bg-manila rounded-2xl border-2 border-ink shadow-retro-lg p-2.5"
-              dir="rtl"
-            >
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-xs sm:text-sm font-cairo font-black text-ink">🎭 استيكرات ميمز عالمية</span>
-                <button
-                  onClick={() => setShowStickerPicker(false)}
-                  className="p-0.5 rounded-full hover:bg-ink/10"
-                >
-                  <X size={17} />
-                </button>
-              </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {MEME_STICKERS.map(st => (
-                  <button
-                    key={st.id}
-                    onClick={() => {
-                      sendSticker(socket, st.id);
-                      setShowStickerPicker(false);
-                    }}
-                    className="flex flex-col items-center gap-0.5 p-1 rounded-xl border-2 border-ink/20 bg-white hover:border-ink hover:shadow-retro-sm active:scale-95 transition-all"
-                  >
-                    <img
-                      src={getStickerImage(st.id)}
-                      alt={st.labelAr}
-                      className="w-14 h-14 rounded-lg object-contain"
-                    />
-                    <span className="text-[10px] font-cairo font-bold text-ink truncate w-full text-center">
-                      {st.labelAr}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Top Row: Avatar + Name + Dossier Progress + Sticker Chat Button */}
-        <div className="w-full flex items-center justify-between text-xs font-cairo font-bold px-0.5">
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden border border-ink bg-white flex-shrink-0">
-              <img
-                src={getAvatarImage(myPlayer.avatarId as AvatarId)}
-                alt={myPlayer.name}
-                className="w-full h-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).src = getAvatarFallback(myPlayer.name); }}
-              />
-            </div>
-            <FolderOpen size={14} className="text-doc-green" />
-            <span className="text-ink font-extrabold">
-              ملف {myPlayer.name} ({myPlayer.file.length}/4)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {myPlayer.isFrozen && (
-              <span className="flex items-center gap-1 bg-defense-blue text-white px-2 py-0.5 rounded-full text-[10px] animate-pulse">
-                <Snowflake size={11} />
-                متجمد!
+    <div className="relative w-full flex flex-col items-center gap-[clamp(2px,0.4dvh,5px)] px-2 py-[clamp(3px,0.6dvh,6px)] bg-[#EFE6D2]/92 rounded-2xl border-2 border-ink shadow-retro-sm">
+      {/* Compact Sticker tucked neatly above corner */}
+      <AnimatePresence>
+        {mySticker && (
+          <motion.div
+            key={`my-sticker-${mySticker.timestamp}`}
+            initial={{ opacity: 0, scale: 0.4, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.4 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 20 }}
+            className="absolute -top-11 left-2 z-30 pointer-events-none bg-white border-2 border-ink rounded-xl shadow-retro-sm px-1.5 py-1 flex items-center gap-1.5"
+          >
+            <img
+              src={getStickerImage(mySticker.stickerId)}
+              alt={stickerMeta?.labelAr || 'ميم'}
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-contain bg-white"
+            />
+            {stickerMeta && (
+              <span className="text-[10px] font-cairo font-black text-ink whitespace-nowrap">
+                {stickerMeta.labelAr}
               </span>
             )}
-            <button
-              onClick={() => setShowStickerPicker(v => !v)}
-              className="flex items-center gap-1 bg-[#FBBF24] text-ink px-2.5 py-0.5 rounded-full border-2 border-ink shadow-retro-sm active:shadow-none text-[11px] font-cairo font-black hover:bg-[#F59E0B] transition-colors"
-              title="ابعت استيكر ميم"
-            >
-              <MessageSquare size={12} />
-              <span>استيكر</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Document Slots (Big clear 3:4 Card Proportions) */}
-        <div className="flex items-center justify-center gap-2.5 sm:gap-3.5 w-full">
-          {CORE_DOCUMENTS.map(doc => {
-            const isFilled = myPlayer.file.includes(doc);
-            return (
-              <DocSlot
-                key={doc}
-                docType={doc}
-                isFilled={isFilled}
-                onPointerEnter={(e) => handleHoverEnter(doc, isFilled, e)}
-                onPointerLeave={() => setHoveredPreview(null)}
-                onClick={() => setInspectedDoc(doc)}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tap-to-Zoom Doc Inspector */}
-      <AnimatePresence>
-        {inspectedDoc && (
-          <motion.div
-            className="absolute inset-0 z-50 flex items-center justify-center bg-ink/70 backdrop-blur-sm p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setInspectedDoc(null)}
-          >
-            <motion.div
-              className="relative flex flex-col items-center gap-3 bg-manila p-5 rounded-2xl border-2 border-ink shadow-retro-lg max-w-xs w-full"
-              initial={{ scale: 0.8 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.8 }}
-              onClick={e => e.stopPropagation()}
-              dir="rtl"
-            >
-              <button
-                onClick={() => setInspectedDoc(null)}
-                className="absolute top-3 left-3 w-8 h-8 rounded-full bg-white border-2 border-ink flex items-center justify-center"
-              >
-                <X size={16} />
-              </button>
-              <span
-                className={`text-xs font-cairo font-bold px-3 py-0.5 rounded-full border ${
-                  myPlayer.file.includes(inspectedDoc)
-                    ? 'bg-doc-green text-white border-ink'
-                    : 'bg-white text-ink/70 border-ink/30'
-                }`}
-              >
-                {myPlayer.file.includes(inspectedDoc) ? '✓ موجود في ملفك' : 'لسه ناقص من ملفك'}
-              </span>
-              <CardComponent cardType={inspectedDoc} size="lg" />
-            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-    </>
-  );
-};
 
-const DocSlot: React.FC<{
-  docType: DocumentCardType;
-  isFilled: boolean;
-  onPointerEnter: (e: React.PointerEvent) => void;
-  onPointerLeave: () => void;
-  onClick: () => void;
-}> = ({ docType, isFilled, onPointerEnter, onPointerLeave, onClick }) => {
-  const def = CARD_DEFINITIONS[docType];
-  const label = DOC_LABELS[docType];
-
-  return (
-    <motion.button
-      type="button"
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      onClick={onClick}
-      whileHover={{ scale: 1.1, y: -3 }}
-      whileTap={{ scale: 0.96 }}
-      className="flex flex-col items-center gap-0.5 cursor-pointer focus:outline-none"
-    >
-      <div
-        className={`w-14 sm:w-16 aspect-[3/4] rounded-lg border-2 overflow-hidden relative transition-shadow ${
-          isFilled
-            ? 'border-doc-green bg-white shadow-retro-sm'
-            : 'border-dashed border-ink/30 bg-white/55 hover:border-ink/60'
-        }`}
-      >
-        <AnimatePresence>
-          {isFilled && (
+      {/* Speech Bubble */}
+      <AnimatePresence>
+        {myBubble && !mySticker && (
+          <div className="absolute -top-6 inset-x-0 z-30 flex justify-center pointer-events-none">
             <motion.div
-              initial={{ scale: 2.3, rotate: -15, opacity: 0 }}
-              animate={{ scale: 1, rotate: 0, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-              className="w-full h-full"
+              key={myBubble}
+              initial={{ opacity: 0, scale: 0.75, y: 6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.75 }}
+              className="whitespace-nowrap bg-white text-ink text-[10.5px] font-cairo font-black px-3 py-0.5 rounded-full border-2 border-ink shadow-retro-sm"
             >
-              <img
-                src={getCardImage(docType)}
-                alt={def.nameAr}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = getCardFallbackSvg(docType, def.nameAr, 'document');
-                }}
-              />
+              {myBubble}
             </motion.div>
-          )}
-        </AnimatePresence>
-        {!isFilled && (
-          <div className="absolute inset-0 flex items-center justify-center p-0.5 text-center">
-            <span className="text-[11px] sm:text-xs font-cairo font-bold text-ink/45 leading-tight">
-              {label}
-            </span>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* Interactive Slot Action Prompt Banner */}
+      <AnimatePresence>
+        {promptText && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="w-full flex items-center justify-between gap-2 bg-wasta-gold text-ink px-2.5 py-0.5 rounded-xl border-2 border-ink shadow-sm text-[10.5px] font-cairo font-black"
+          >
+            <span className="truncate">{promptText}</span>
+            {interactionMode && (
+              <button
+                onClick={() => setInteractionMode(null)}
+                className="bg-white px-2 py-0.5 rounded-lg border border-ink text-[9.5px] hover:bg-manila flex-shrink-0"
+              >
+                إلغاء
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header Strip */}
+      <div className="w-full flex items-center justify-between text-xs font-cairo font-bold px-0.5 gap-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full overflow-hidden border border-ink bg-white flex-shrink-0">
+            <img
+              src={getAvatarImage(myPlayer.avatarId as AvatarId)}
+              alt={myPlayer.name}
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).src = getAvatarFallback(myPlayer.name); }}
+            />
+          </div>
+          <span className="text-[11px] sm:text-xs text-ink font-black truncate">
+            ملف {myPlayer.name}
+          </span>
+          <span className="text-[9.5px] font-cairo font-bold text-ink/60 bg-white/75 px-1.5 py-0 rounded-full border border-ink/20">
+            {AVATAR_LABELS[myPlayer.avatarId as AvatarId]}
+          </span>
+          {myPlayer.matchScore !== 0 && (
+            <span
+              className={`text-[9.5px] px-1.5 rounded-full font-black ${
+                myPlayer.matchScore > 0 ? 'bg-doc-green/15 text-doc-green' : 'bg-prank-red/15 text-prank-red'
+              }`}
+            >
+              جرد: {myPlayer.matchScore > 0 ? `+${myPlayer.matchScore}` : myPlayer.matchScore}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {myPlayer.isImmuneThisRound && (
+            <span
+              className="flex items-center gap-0.5 bg-defense-blue text-white px-1.5 py-0.5 rounded-full text-[9px] font-black"
+              title="محصّن ضد المقالب لحد ما ييجي دورك"
+            >
+              <Shield size={9} />
+              محصّن
+            </span>
+          )}
+          {myPlayer.isFrozen && (
+            <span className="flex items-center gap-0.5 bg-prank-red text-white px-1.5 py-0.5 rounded-full text-[9px] animate-pulse">
+              <Snowflake size={9} />
+              متجمد!
+            </span>
+          )}
+          <button
+            onClick={() => openModal('stickers')}
+            className="flex items-center gap-1 bg-[#FBBF24] text-ink px-2 py-0.5 rounded-full border-2 border-ink shadow-retro-sm active:shadow-none text-[10px] font-cairo font-black hover:bg-[#F59E0B] transition-colors"
+          >
+            <MessageSquare size={11} />
+            <span>استيكر</span>
+          </button>
+        </div>
       </div>
-      <span className={`text-[11px] sm:text-xs font-cairo font-extrabold ${isFilled ? 'text-doc-green' : 'text-ink/55'}`}>
-        {label}
-      </span>
-    </motion.button>
+
+      {/* Responsive 4-Card Dossier with Tampered & Highlight Indicators */}
+      <div className="flex items-center justify-center gap-[clamp(6px,2.2vw,14px)] w-full py-0.5">
+        {myPlayer.dossierSlots.map((slot, idx) => {
+          const singleMatch = activePeek?.targetPlayerId === myId && activePeek.slotIndex === idx;
+          const multiMatch = activeMultiPeek?.find(m => m.targetPlayerId === myId && m.slotIndex === idx);
+          const revealedCardType = isGameOver
+            ? slot.revealedCard?.cardType
+            : singleMatch
+            ? activePeek?.card.cardType
+            : multiMatch?.card.cardType ?? null;
+          const isRevealed = Boolean(revealedCardType);
+          const wasSeen = mySeenSlots.includes(idx);
+          const wasTampered = myTamperedSlots.includes(idx);
+          const slotHighlight = myHighlights.find(h => h.slotIndex === idx);
+
+          const isSlotSelectable = Boolean(
+            (isPeekStart && slot.hasCard && !wasSeen) ||
+              (isMyTurnAction && interactionMode?.type === 'place_in_slot') ||
+              (isMyTurnAction && interactionMode?.type === 'match_archive' && slot.hasCard) ||
+              (isMyTurnAction &&
+                interactionMode?.type === 'pick_own_slot' &&
+                (interactionMode.purpose === 'wasta' ? true : slot.hasCard)),
+          );
+
+          const slotSize = 'w-[clamp(52px,15.5vw,72px)] aspect-[3/4]';
+
+          return (
+            <motion.div
+              key={`my-slot-${idx}`}
+              animate={slotHighlight ? { scale: [1, 1.1, 1], rotate: [0, -4, 4, 0] } : {}}
+              transition={{ duration: 0.45 }}
+              className="flex flex-col items-center gap-0.5 relative"
+            >
+              {slot.hasCard ? (
+                <div className="relative">
+                  <FlipCard
+                    cardType={revealedCardType}
+                    isRevealed={isRevealed}
+                    isHighlighted={singleMatch || Boolean(multiMatch) || isSlotSelectable || Boolean(slotHighlight)}
+                    sizeClass={slotSize}
+                    onClick={
+                      isSlotSelectable
+                        ? () => handleSlotTap(idx, slot.hasCard)
+                        : undefined
+                    }
+                  >
+                    {wasSeen && !isRevealed && !wasTampered && (
+                      <span
+                        className="absolute bottom-1 left-1 bg-defense-blue/90 text-white rounded-full p-0.5 border border-white z-20"
+                        title="سبق وشفت أو نزّلت الكارت ده"
+                      >
+                        <Eye size={9} />
+                      </span>
+                    )}
+                    {wasTampered && !isRevealed && (
+                      <span
+                        className="absolute bottom-1 left-1 bg-wasta-gold text-ink rounded-full p-0.5 border border-ink z-20 animate-pulse"
+                        title="الخانة دي اتبدلت من وراك!"
+                      >
+                        <AlertTriangle size={9} />
+                      </span>
+                    )}
+                  </FlipCard>
+                  {isSlotSelectable && (
+                    <span className="pointer-events-none absolute -top-2 right-0.5 bg-doc-green text-white text-[8.5px] font-cairo font-black px-1.5 rounded-full border border-ink animate-bounce z-30">
+                      اختار
+                    </span>
+                  )}
+                  {slotHighlight && !isSlotSelectable && (
+                    <span
+                      className={`pointer-events-none absolute -top-2 inset-x-0 mx-auto w-max px-1.5 py-0 rounded-full text-[8.5px] font-cairo font-black border border-ink shadow-sm z-30 animate-bounce ${
+                        slotHighlight.kind === 'removed'
+                          ? 'bg-prank-red text-white'
+                          : slotHighlight.kind === 'peeked'
+                          ? 'bg-defense-blue text-white'
+                          : 'bg-wasta-gold text-ink'
+                      }`}
+                    >
+                      {slotHighlight.labelAr}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!isSlotSelectable}
+                  onClick={() => isSlotSelectable && handleSlotTap(idx, false)}
+                  className={`${slotSize} rounded-lg border-2 border-dashed flex flex-col items-center justify-center p-1 transition-all ${
+                    isSlotSelectable
+                      ? 'border-wasta-gold bg-wasta-gold/20 ring-2 ring-wasta-gold animate-pulse cursor-pointer'
+                      : slotHighlight
+                      ? 'border-prank-red bg-prank-red/15 ring-2 ring-prank-red'
+                      : 'border-ink/30 bg-white/50 cursor-default'
+                  }`}
+                >
+                  <ShieldAlert size={13} className="text-ink/30 mb-0.5" />
+                  <span className="text-[9.5px] font-cairo font-bold text-ink/50">فاضية</span>
+                </button>
+              )}
+              <span className="text-[9.5px] font-cairo font-extrabold text-ink/75">
+                {SLOT_LABELS_AR[idx]}
+              </span>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
   );
 };

@@ -4,12 +4,10 @@
 
 import type { CardType, AvatarId } from '@el-khetm/shared';
 
-// === Base Paths ===
 const CARDS_PATH = '/assets/cards';
 const AVATARS_PATH = '/assets/avatars';
 const BACKGROUNDS_PATH = '/assets/backgrounds';
 const BRANDING_PATH = '/assets/branding';
-const SOUNDS_PATH = '/assets/sounds';
 
 // === Card Images ===
 export const CARD_IMAGES: Record<CardType, string> = {
@@ -17,6 +15,8 @@ export const CARD_IMAGES: Record<CardType, string> = {
   stamp_duty: `${CARDS_PATH}/stamp_duty.jpg`,
   manager_sign: `${CARDS_PATH}/manager_sign.jpg`,
   eagle_seal: `${CARDS_PATH}/eagle_seal.jpg`,
+  fake_paper: `${CARDS_PATH}/fake_paper.jpg`,
+  violation_ticket: `${CARDS_PATH}/violation_ticket.svg`,
   system_down: `${CARDS_PATH}/system_down.jpg`,
   come_tomorrow: `${CARDS_PATH}/come_tomorrow.jpg`,
   missing_papers: `${CARDS_PATH}/missing_papers.jpg`,
@@ -25,6 +25,10 @@ export const CARD_IMAGES: Record<CardType, string> = {
   file_lost: `${CARDS_PATH}/file_lost.jpg`,
   breakfast_break: `${CARDS_PATH}/breakfast_break.jpg`,
   wasta: `${CARDS_PATH}/wasta.jpg`,
+  drawer_peek: `${CARDS_PATH}/drawer_peek.jpg`,
+  show_me_all: `${CARDS_PATH}/show_me_all.svg`,
+  desk_swap: `${CARDS_PATH}/desk_swap.svg`,
+  dossier_sort: `${CARDS_PATH}/dossier_sort.svg`,
   recommendation: `${CARDS_PATH}/recommendation.jpg`,
   uncle_gamal: `${CARDS_PATH}/uncle_gamal.jpg`,
 };
@@ -42,29 +46,13 @@ export const AVATAR_IMAGES: Record<AvatarId, string> = {
 // === Backgrounds ===
 export const BACKGROUNDS = {
   lobby_mobile: `${BACKGROUNDS_PATH}/lobby_bg_mobile.jpg`,
-  lobby_desktop: `${BACKGROUNDS_PATH}/lobby_bg_desktop.jpg`,
   table_mobile: `${BACKGROUNDS_PATH}/table_bg_mobile.jpg`,
-  table_desktop: `${BACKGROUNDS_PATH}/table_bg_desktop.jpg`,
 };
 
 // === Branding ===
 export const BRANDING = {
   logo: `${BRANDING_PATH}/logo.png`,
   appIcon: `${BRANDING_PATH}/app_icon.png`,
-};
-
-// === Sounds ===
-export const SOUND_FILES = {
-  stamp: `${SOUNDS_PATH}/stamp.mp3`,
-  card_flip: `${SOUNDS_PATH}/card_flip.mp3`,
-  card_draw: `${SOUNDS_PATH}/card_draw.mp3`,
-  prank_alarm: `${SOUNDS_PATH}/prank_alarm.mp3`,
-  shield_block: `${SOUNDS_PATH}/shield_block.mp3`,
-  tick_tock: `${SOUNDS_PATH}/tick_tock.mp3`,
-  win_fanfare: `${SOUNDS_PATH}/win_fanfare.mp3`,
-  shutter_close: `${SOUNDS_PATH}/shutter_close.mp3`,
-  swoosh: `${SOUNDS_PATH}/swoosh.mp3`,
-  buzz: `${SOUNDS_PATH}/buzz.mp3`,
 };
 
 // === Global Meme Stickers ===
@@ -85,22 +73,19 @@ export function getStickerImage(stickerId: string): string {
   return STICKER_IMAGES[stickerId] || `${STICKERS_PATH}/this_is_fine.jpg`;
 }
 
-// === Category Colors (for fallback SVGs) ===
+// === Category Colors ===
 const CATEGORY_COLORS: Record<string, string> = {
   document: '#15803D',
+  trap: '#64748B',
   prank: '#B91C1C',
   utility: '#1D4ED8',
 };
 
-// === Fallback Helpers ===
-
-/** Get card image with colored SVG fallback */
 export function getCardImage(cardType: CardType): string {
   return CARD_IMAGES[cardType];
 }
 
-/** Create a fallback SVG data URL for a card */
-export function getCardFallbackSvg(cardType: CardType, nameAr: string, category: string): string {
+export function getCardFallbackSvg(_cardType: CardType, nameAr: string, category: string): string {
   const color = CATEGORY_COLORS[category] || '#1E293B';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
     <rect width="200" height="200" rx="12" fill="${color}" opacity="0.15"/>
@@ -110,12 +95,10 @@ export function getCardFallbackSvg(cardType: CardType, nameAr: string, category:
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-/** Get avatar image with initials-circle fallback */
 export function getAvatarImage(avatarId: AvatarId): string {
   return AVATAR_IMAGES[avatarId];
 }
 
-/** Create a fallback initials circle SVG */
 export function getAvatarFallback(name: string): string {
   const initial = name.charAt(0) || '?';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
@@ -126,20 +109,14 @@ export function getAvatarFallback(name: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-/** Get background image with manila CSS fallback */
 export function getBackground(name: keyof typeof BACKGROUNDS): string {
   return BACKGROUNDS[name];
 }
 
-/** Manila background CSS fallback style */
-export const MANILA_FALLBACK_BG = 'linear-gradient(135deg, #F4EFE6 0%, #EDE5D8 50%, #F4EFE6 100%)';
-
-/** Get card back image with CSS geometric pattern fallback */
 export function getCardBack(): string {
   return CARD_BACK;
 }
 
-/** CSS fallback for card back (geometric pattern) */
 export const CARD_BACK_FALLBACK_CSS = `
   background: repeating-conic-gradient(#1E293B 0% 25%, #F4EFE6 0% 50%) 50% / 16px 16px;
   border: 2px solid #1E293B;

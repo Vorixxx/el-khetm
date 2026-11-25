@@ -1,9 +1,10 @@
 // ========================
-// EL-KHETM — Game Board (9:16 Portrait Card Table Around Parchment Desk)
+// EL-KHETM — Game Board (Circular Table + Spotlight Pop-Out Card + Multi-Peek Strip)
 // ========================
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, Sparkles } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { TopBarHUD } from './TopBarHUD';
 import { OpponentSeat } from './OpponentSeat';
@@ -11,7 +12,9 @@ import { TableCenter } from './TableCenter';
 import { PlayerFile } from './PlayerFile';
 import { PlayerHand } from './PlayerHand';
 import { FloatingCardPreview } from './FloatingCardPreview';
-import { BACKGROUNDS } from '../config/assets';
+import { Card as CardComponent } from './Card';
+import { BACKGROUNDS, CARD_BACK } from '../config/assets';
+import { CARD_DEFINITIONS } from '@el-khetm/shared';
 import type { PublicPlayer } from '@el-khetm/shared';
 
 interface SeatAssignment {
@@ -69,16 +72,22 @@ export const GameBoard: React.FC = () => {
     }
   }, [lastEvent?.id, lastEvent?.blocked]);
 
+  useEffect(() => {
+    const backImg = new Image();
+    backImg.src = CARD_BACK;
+  }, []);
+
   if (!publicState) return null;
 
   const myId = privateState?.playerId || myPlayerId || '';
   const seats = assignSeats(publicState.players, myId);
+  const startPeeksLeft = privateState?.startPeeksRemaining ?? 0;
 
   return (
     <div
       className="h-full w-full flex flex-col justify-between overflow-hidden relative"
       style={{
-        backgroundImage: `radial-gradient(ellipse at center, rgba(244,239,230,0.03) 40%, rgba(30,41,59,0.20) 100%), url('${BACKGROUNDS.table_mobile}')`,
+        backgroundImage: `radial-gradient(ellipse at center, rgba(244,239,230,0.06) 35%, rgba(20,14,10,0.34) 100%), url('${BACKGROUNDS.table_mobile}')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
@@ -86,38 +95,62 @@ export const GameBoard: React.FC = () => {
       }}
       dir="rtl"
     >
-      {/* Subtle turn-flow chevrons around table corners */}
-      <div className="pointer-events-none select-none absolute top-[17%] right-3 text-wasta-gold/75 font-black text-sm rotate-[-40deg]">
-        ‹‹‹
-      </div>
-      <div className="pointer-events-none select-none absolute top-[17%] left-3 text-wasta-gold/75 font-black text-sm rotate-[40deg]">
-        ‹‹‹
-      </div>
-      <div className="pointer-events-none select-none absolute bottom-[37%] right-3 text-wasta-gold/75 font-black text-sm rotate-[40deg]">
-        ›››
-      </div>
-      <div className="pointer-events-none select-none absolute bottom-[37%] left-3 text-wasta-gold/75 font-black text-sm rotate-[-40deg]">
-        ›››
+      {/* Glowing Circular Table Arena Ring */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+        <div className="w-[92%] max-w-[440px] aspect-square -translate-y-4 rounded-full border-[3px] border-wasta-gold/65 shadow-[0_0_42px_rgba(245,158,11,0.35),inset_0_0_38px_rgba(30,41,59,0.18)] bg-ink/[0.04] relative">
+          <div className="absolute inset-2.5 rounded-full border border-dashed border-ink/20" />
+          <span className="compact-hide-short absolute -top-2.5 left-1/2 -translate-x-1/2 bg-manila/95 text-[9px] font-cairo font-extrabold text-ink px-2 py-0 rounded-full border border-wasta-gold/70 shadow-sm">
+            ↻ اتجاه اللعب
+          </span>
+          <span className="compact-hide-short absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-manila/95 text-[9px] font-cairo font-extrabold text-ink px-2 py-0 rounded-full border border-wasta-gold/70 shadow-sm">
+            اتجاه اللعب ↺
+          </span>
+        </div>
       </div>
 
-      {/* Blue shield ripple flash on breakfast_break */}
+      {/* Shield Flash */}
       <AnimatePresence>
         {shieldFlash && (
           <motion.div
             key="shield-flash"
-            initial={{ opacity: 0.65, scale: 0.85 }}
-            animate={{ opacity: 0, scale: 1.4 }}
+            initial={{ opacity: 0.7, scale: 0.8 }}
+            animate={{ opacity: 0, scale: 1.45 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.7, ease: 'easeOut' }}
             className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center"
           >
-            <div className="w-56 h-56 rounded-full border-8 border-defense-blue/70 bg-defense-blue/15" />
+            <div className="w-56 h-56 rounded-full border-8 border-defense-blue/75 bg-defense-blue/15" />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Top Corner HUD */}
+      {/* Top HUD */}
       <TopBarHUD />
+
+      {/* Urgent Global Status Strip */}
+      <AnimatePresence>
+        {publicState.phase === 'PEEK_START' && (
+          <PeekStartBanner
+            startPeeksLeft={startPeeksLeft}
+            peekStartExpiresAt={publicState.peekStartExpiresAt}
+          />
+        )}
+
+        {publicState.windowClosedByPlayerId && publicState.phase !== 'GAME_OVER' && (
+          <motion.div
+            key="window-closed-banner"
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="mx-3 mb-0.5 z-20 flex items-center justify-center gap-1.5 bg-prank-red text-white px-3 py-1 rounded-full border-2 border-ink shadow-retro-sm text-[11px] font-cairo font-black animate-pulse"
+          >
+            <Sparkles size={13} />
+            <span>
+              🚨 {publicState.windowClosedPlayerName} قفل الشباك! جولة أخيرة قبل كشف الملفات!
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Top Opponent Seat(s) */}
       {seats.top.length > 0 && (
@@ -128,20 +161,22 @@ export const GameBoard: React.FC = () => {
               player={opp}
               position="top"
               isCurrentTurn={publicState.currentTurnPlayerId === opp.id}
+              turnExpiresAt={publicState.turnExpiresAt}
               lastEvent={lastEvent}
             />
           ))}
         </div>
       )}
 
-      {/* Middle Tabletop Ring: Right Seat | Center Table | Left Seat */}
-      <div className="flex-1 min-h-0 w-full flex items-center justify-between gap-1 sm:gap-4 px-1.5 sm:px-6 z-10">
+      {/* Middle Ring */}
+      <div className="flex-1 min-h-0 w-full flex items-center justify-between gap-1 sm:gap-3 px-1 sm:px-4 z-10">
         <div className="flex-shrink-0 flex items-center justify-center">
           {seats.right && (
             <OpponentSeat
               player={seats.right}
               position="right"
               isCurrentTurn={publicState.currentTurnPlayerId === seats.right.id}
+              turnExpiresAt={publicState.turnExpiresAt}
               lastEvent={lastEvent}
             />
           )}
@@ -157,24 +192,196 @@ export const GameBoard: React.FC = () => {
               player={seats.left}
               position="left"
               isCurrentTurn={publicState.currentTurnPlayerId === seats.left.id}
+              turnExpiresAt={publicState.turnExpiresAt}
               lastEvent={lastEvent}
             />
           )}
         </div>
       </div>
 
-      {/* Bottom: Player's File & Sticker Trigger */}
-      <div className="flex-shrink-0 px-2 pb-1 z-20">
+      {/* Bottom Seat */}
+      <div className="flex-shrink-0 px-1.5 sm:px-2 pb-1 z-20">
         <PlayerFile />
       </div>
 
-      {/* Bottom: Player's Hand */}
+      {/* Bottom Hand */}
       <div className="flex-shrink-0 z-20 pb-1.5 px-1.5">
         <PlayerHand />
       </div>
 
-      {/* Non-Blocking Hover Preview HUD */}
+      {/* Center Pop-Out Spotlight Card */}
+      <SpotlightCardOverlay />
+
+      {/* Secret Peek Notification Pills */}
+      <PeekSecretBanner />
+
+      {/* Desktop Hover Preview */}
       <FloatingCardPreview />
     </div>
+  );
+};
+
+const PeekStartBanner: React.FC<{ startPeeksLeft: number; peekStartExpiresAt: number | null }> = ({
+  startPeeksLeft,
+  peekStartExpiresAt,
+}) => {
+  const [peekSecondsLeft, setPeekSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    if (!peekStartExpiresAt) {
+      setPeekSecondsLeft(0);
+      return;
+    }
+    const tick = () => setPeekSecondsLeft(Math.max(0, Math.ceil((peekStartExpiresAt - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [peekStartExpiresAt]);
+
+  return (
+    <motion.div
+      key="peek-start-banner"
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="mx-3 mb-0.5 z-20 flex items-center justify-between bg-defense-blue text-white px-3 py-1 rounded-full border-2 border-ink shadow-retro-sm text-[11px] sm:text-xs font-cairo font-extrabold"
+    >
+      <span className="flex items-center gap-1.5">
+        <Eye size={13} className="animate-pulse" />
+        {startPeeksLeft > 0
+          ? `نظرة البداية: اضغط على ${startPeeksLeft} خانات في ملفك تحت واحفظهم!`
+          : 'تمام! احفظ ورقك، الجيم هيبدأ حالاً...'}
+      </span>
+      <span className="bg-white text-ink px-2 py-0 rounded-full text-[10.5px] font-black">
+        {peekSecondsLeft} ث
+      </span>
+    </motion.div>
+  );
+};
+
+const SpotlightCardOverlay: React.FC = () => {
+  const { publicState, activeModal } = useGameStore();
+  const [visible, setVisible] = useState(false);
+  const spotlight = publicState?.spotlightCard ?? null;
+
+  useEffect(() => {
+    if (!spotlight || spotlight.expiresAt <= Date.now()) {
+      setVisible(false);
+      return;
+    }
+    setVisible(true);
+    const ms = Math.max(0, spotlight.expiresAt - Date.now());
+    const t = setTimeout(() => setVisible(false), ms);
+    return () => clearTimeout(t);
+  }, [spotlight?.id]);
+
+  if (!spotlight || !visible || activeModal === 'reaction' || activeModal === 'gameover') {
+    return null;
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key={spotlight.id}
+        initial={{ opacity: 0, scale: 0.55, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.65, y: -12 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 22 }}
+        className="pointer-events-none absolute inset-x-0 top-[33%] z-30 flex flex-col items-center justify-center px-4"
+        dir="rtl"
+      >
+        <div className="bg-ink/90 text-white rounded-2xl border-2 border-wasta-gold shadow-[0_12px_32px_rgba(0,0,0,0.45)] p-2.5 flex items-center gap-2.5 max-w-[290px]">
+          <CardComponent cardType={spotlight.cardType} size="xs" />
+          <div className="flex-1 min-w-0">
+            <p className="font-cairo font-black text-xs text-wasta-gold truncate">
+              {spotlight.headlineAr}
+            </p>
+            <p className="font-cairo font-bold text-[10.5px] text-white/90 leading-snug mt-0.5 line-clamp-2">
+              {spotlight.subtitleAr}
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+const PeekSecretBanner: React.FC = () => {
+  const { privateState, publicState } = useGameStore();
+  const activePeek = privateState?.activePeek ?? null;
+  const activeMultiPeek = privateState?.activeMultiPeek ?? null;
+  const [rem, setRem] = useState(0);
+
+  useEffect(() => {
+    const exp = activeMultiPeek?.[0]?.expiresAt ?? activePeek?.expiresAt;
+    if (!exp) {
+      setRem(0);
+      return;
+    }
+    const tick = () => setRem(Math.max(0, Math.ceil((exp - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [activePeek, activeMultiPeek]);
+
+  if (rem <= 0 || !publicState) return null;
+
+  if (activeMultiPeek && activeMultiPeek.length > 0) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          key="multi-peek-banner"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 12 }}
+          className="absolute bottom-[clamp(245px,36dvh,320px)] inset-x-0 z-40 flex justify-center pointer-events-none px-3"
+          dir="rtl"
+        >
+          <div className="bg-ink/95 text-white px-3 py-2 rounded-2xl border-2 border-wasta-gold shadow-retro-lg flex flex-col gap-1 max-w-[360px]">
+            <div className="flex items-center justify-between text-[11px] font-cairo font-black text-wasta-gold">
+              <span>👀 وريني كده اللي معاك (تفتيش سري)</span>
+              <span className="bg-white/20 text-white px-1.5 rounded-full text-[10px]">{rem}ث</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 text-[10px] font-cairo font-bold">
+              {activeMultiPeek.map(item => {
+                const owner = publicState.players.find(p => p.id === item.targetPlayerId);
+                return (
+                  <span key={`${item.targetPlayerId}-${item.slotIndex}`} className="bg-white/10 px-2 py-0.5 rounded-lg border border-white/20">
+                    {owner?.id === privateState?.playerId ? 'أنت' : owner?.name} (#{item.slotIndex + 1}):{' '}
+                    <strong className="text-wasta-gold">{CARD_DEFINITIONS[item.card.cardType].nameAr}</strong>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  if (!activePeek) return null;
+  const owner = publicState.players.find(p => p.id === activePeek.targetPlayerId);
+  const cardDef = CARD_DEFINITIONS[activePeek.card.cardType];
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key={`peek-banner-${activePeek.targetPlayerId}-${activePeek.slotIndex}`}
+        initial={{ opacity: 0, y: 12, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 12 }}
+        className="absolute bottom-[clamp(245px,36dvh,320px)] inset-x-0 z-40 flex justify-center pointer-events-none px-4"
+        dir="rtl"
+      >
+        <div className="bg-ink text-white px-3.5 py-1.5 rounded-full border-2 border-wasta-gold shadow-retro-lg flex items-center gap-2 text-xs font-cairo font-bold">
+          <span>👁️</span>
+          <span>
+            كشف سري ({owner?.id === privateState?.playerId ? 'ملفك' : owner?.name} - خانة #{activePeek.slotIndex + 1}):
+          </span>
+          <span className="text-wasta-gold font-black">{cardDef.nameAr}</span>
+          <span className="bg-white/20 px-1.5 rounded-full text-[10px]">{rem}ث</span>
+        </div>
+      </motion.div>
+    </AnimatePresence>
   );
 };

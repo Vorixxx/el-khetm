@@ -1,10 +1,10 @@
 // ========================
-// EL-KHETM — Top Bar HUD (Clock, Rules, Mute, Event Log Drawer, Exit)
+// EL-KHETM — Top Bar HUD (Clock, Card Counter, Event Log, Rules, Mute, Exit)
 // ========================
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HelpCircle, Volume2, VolumeX, ScrollText, LogOut, X } from 'lucide-react';
+import { HelpCircle, Volume2, VolumeX, ScrollText, LogOut, X, BarChart3 } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import { roundToClockTime, roundToClockProgress, CARD_DEFINITIONS } from '@el-khetm/shared';
@@ -24,10 +24,10 @@ export const TopBarHUD: React.FC = () => {
 
   return (
     <>
-      <div className="w-full flex-shrink-0 flex items-center justify-between px-2.5 pt-2 pb-1 z-20" dir="rtl">
+      <div className="w-full flex-shrink-0 flex items-center justify-between px-2 pt-1.5 pb-0.5 z-20" dir="rtl">
         {/* Right: Office Clock + Round Counter */}
-        <div className="flex items-center gap-2 bg-manila/95 backdrop-blur-sm px-2.5 py-1 rounded-xl border-2 border-ink shadow-retro-sm">
-          <div className="relative w-9 h-9 flex-shrink-0">
+        <div className="flex items-center gap-1.5 bg-manila/95 px-2 py-1 rounded-xl border-2 border-ink shadow-retro-sm">
+          <div className="relative w-8 h-8 flex-shrink-0">
             <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
               <circle cx="18" cy="18" r="16" fill="#FFFFFFAA" stroke="#1E293B25" strokeWidth="3" />
               <circle
@@ -38,28 +38,37 @@ export const TopBarHUD: React.FC = () => {
                 strokeLinecap="round"
               />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-[8px] font-cairo font-black text-ink" dir="ltr">
+            <span className="absolute inset-0 flex items-center justify-center text-[7.5px] font-cairo font-black text-ink" dir="ltr">
               {clockTime}
             </span>
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-[11px] sm:text-xs font-cairo font-extrabold text-ink">
+            <span className="text-[10.5px] font-cairo font-extrabold text-ink">
               الساعة {clockTime}
             </span>
-            <span className="text-[10px] font-cairo font-bold text-ink/65">
+            <span className="text-[9.5px] font-cairo font-bold text-ink/65">
               جولة {round} / 20
             </span>
           </div>
         </div>
 
-        {/* Left: Controls (Event History, Mute, Rules, Leave) */}
-        <div className="flex items-center gap-1 bg-manila/95 backdrop-blur-sm px-2 py-1 rounded-xl border-2 border-ink shadow-retro-sm">
+        {/* Left: Controls (Card Counter, Event History, Mute, Rules, Exit) */}
+        <div className="flex items-center gap-0.5 bg-manila/95 px-1.5 py-1 rounded-xl border-2 border-ink shadow-retro-sm">
+          <button
+            onClick={() => openModal('card_counter')}
+            className="flex items-center gap-1 px-1.5 py-1 rounded-lg hover:bg-ink/10 active:bg-ink/15 transition-colors text-[10.5px] font-cairo font-bold text-defense-blue"
+            title="عدّاد الأرشيف لتحليل الكروت"
+          >
+            <BarChart3 size={15} />
+            <span>العدّاد</span>
+          </button>
+
           <button
             onClick={() => setShowHistory(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-ink/10 active:bg-ink/15 transition-colors text-[11px] sm:text-xs font-cairo font-bold text-ink"
-            title="سجل وشرح الحركات"
+            className="flex items-center gap-1 px-1.5 py-1 rounded-lg hover:bg-ink/10 active:bg-ink/15 transition-colors text-[10.5px] font-cairo font-bold text-ink"
+            title="سجل الحركات"
           >
-            <ScrollText size={16} />
+            <ScrollText size={15} />
             <span>السجل</span>
           </button>
 
@@ -70,7 +79,7 @@ export const TopBarHUD: React.FC = () => {
             }`}
             title={isMuted ? 'تشغيل الصوت' : 'كتم الصوت'}
           >
-            {isMuted ? <VolumeX size={17} /> : <Volume2 size={17} />}
+            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
 
           <button
@@ -78,7 +87,7 @@ export const TopBarHUD: React.FC = () => {
             className="p-1.5 rounded-lg hover:bg-ink/10 active:bg-ink/15 transition-colors"
             title="طريقة اللعب"
           >
-            <HelpCircle size={17} className="text-ink" />
+            <HelpCircle size={16} className="text-ink" />
           </button>
 
           <button
@@ -86,16 +95,16 @@ export const TopBarHUD: React.FC = () => {
             className="p-1.5 rounded-lg hover:bg-prank-red/10 text-prank-red active:bg-prank-red/20 transition-colors"
             title="خروج من الجيم"
           >
-            <LogOut size={17} />
+            <LogOut size={16} />
           </button>
         </div>
       </div>
 
-      {/* Event History & Explanation Modal */}
+      {/* Event History Modal */}
       <AnimatePresence>
         {showHistory && (
           <motion.div
-            className="absolute inset-0 z-50 flex items-center justify-center bg-ink/55 backdrop-blur-xs p-4"
+            className="absolute inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -128,16 +137,18 @@ export const TopBarHUD: React.FC = () => {
                       className={`flex items-start gap-2.5 p-2.5 rounded-xl border-2 bg-white ${
                         ev.blocked
                           ? 'border-defense-blue'
-                          : CARD_DEFINITIONS[ev.cardType].category === 'prank'
+                          : ev.cardType && CARD_DEFINITIONS[ev.cardType].category === 'prank'
                           ? 'border-prank-red/60'
                           : 'border-doc-green/60'
                       }`}
                     >
-                      <img
-                        src={getCardImage(ev.cardType)}
-                        alt={CARD_DEFINITIONS[ev.cardType].nameAr}
-                        className="w-10 h-14 rounded border border-ink object-cover flex-shrink-0"
-                      />
+                      {ev.cardType && (
+                        <img
+                          src={getCardImage(ev.cardType)}
+                          alt={CARD_DEFINITIONS[ev.cardType].nameAr}
+                          className="w-10 h-14 rounded border border-ink object-cover flex-shrink-0"
+                        />
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="font-cairo font-extrabold text-xs text-ink">{ev.headlineAr}</p>
                         <p className="font-cairo text-[11px] text-ink/75 mt-0.5 leading-relaxed">{ev.explanationAr}</p>

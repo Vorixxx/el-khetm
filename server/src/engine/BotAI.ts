@@ -1,33 +1,48 @@
 // ========================
-// EL-KHETM (الختم) — Bot AI Engine
-// Smart heuristic AI for Bots & AFK/Disconnected takeover
+// EL-KHETM (الختم) — Strategic Memory Bot AI (Positional + Anti-Spam Aware)
 // ========================
 
 import {
   Card,
   CardType,
   DocumentCardType,
+  DrawSource,
   GAME_CONSTANTS,
 } from '@el-khetm/shared';
 import {
-  CARD_DEFINITIONS,
   getCardDef,
   isDocumentCard,
-  canPlayEagleSeal,
-  EAGLE_SEAL_PREREQUISITES,
-  CORE_DOCUMENTS,
+  PREFERRED_DOC_SLOT,
   CARD_PRIORITY,
   getCardPlayError,
+  CORE_DOCUMENTS,
 } from '@el-khetm/shared';
-import { ServerPlayer, ServerGameState } from './CardEffects';
+import {
+  ServerPlayer,
+  ServerGameState,
+  getNextPlayer,
+  getPrevPlayer,
+} from './CardEffects';
 
-// === Types ===
+export interface BotDrawDecision {
+  source: DrawSource;
+  marketIndex?: number;
+}
 
 export interface BotAction {
-  type: 'play_card' | 'end_turn';
+  type:
+    | 'place_in_slot'
+    | 'match_archive'
+    | 'close_window'
+    | 'play_card'
+    | 'end_turn';
   cardInstanceId?: string;
+  slotIndex?: number;
+  ownSlotIndex?: number;
   targetPlayerId?: string;
-  targetDocument?: DocumentCardType;
+  targetSlotIndex?: number;
+  burnCardInstanceId?: string;
+  multiTargets?: Record<string, number>;
 }
 
 export interface BotReactionDecision {
@@ -42,26 +57,53 @@ export interface BotArchiveDecision {
   cardInstanceId: string;
 }
 
-// === Helper Functions ===
-
-function getNeededDocs(player: ServerPlayer): DocumentCardType[] {
-  return CORE_DOCUMENTS.filter(doc => !player.file.includes(doc));
+function getKnownUniqueDocs(bot: ServerPlayer): Set<DocumentCardType> {
+  const mem = bot.botMemory[bot.id] || {};
+  const set = new Set<DocumentCardType>();
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    if (!bot.dossierSlots[i]) continue;
+    const known = mem[i];
+    if (known && isDocumentCard(known)) {
+      set.add(known);
+    }
+  }
+  return set;
 }
 
-function getNeededCoreDocs(player: ServerPlayer): DocumentCardType[] {
-  return EAGLE_SEAL_PREREQUISITES.filter(doc => !player.file.includes(doc));
+function getKnownSlotScoreEstimate(bot: ServerPlayer): { knownCount: number; uniqueDocs: number; traps: number } {
+  const mem = bot.botMemory[bot.id] || {};
+  const seen = new Set<DocumentCardType>();
+  let knownCount = 0;
+  let traps = 0;
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    if (!bot.dossierSlots[i]) continue;
+    const known = mem[i];
+    if (!known) continue;
+    knownCount++;
+    if (isDocumentCard(known)) {
+      seen.add(known);
+    } else if (getCardDef(known).category === 'trap' || getCardDef(known).category === 'prank') {
+      traps++;
+    }
+  }
+  return { knownCount, uniqueDocs: seen.size, traps };
 }
 
-function findCardInHand(hand: Card[], cardType: CardType): Card | undefined {
-  return hand.find(c => c.cardType === cardType);
+function getNeededDocsFromMemory(bot: ServerPlayer): DocumentCardType[] {
+  const known = getKnownUniqueDocs(bot);
+  return CORE_DOCUMENTS.filter(d => !known.has(d));
 }
 
-function findCardsInHand(hand: Card[], cardType: CardType): Card[] {
-  return hand.filter(c => c.cardType === cardType);
+function getNonImmuneOpponents(state: ServerGameState, botId: string): ServerPlayer[] {
+  const list = state.players.filter(p => p.id !== botId && !p.isImmuneThisRound);
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
 }
 
-function getOpponents(state: ServerGameState, botId: string): ServerPlayer[] {
-  // Shuffle opponents so ties never always fall on players[0] (the human player)
+function getAllOpponents(state: ServerGameState, botId: string): ServerPlayer[] {
   const list = state.players.filter(p => p.id !== botId);
   for (let i = list.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -70,256 +112,359 @@ function getOpponents(state: ServerGameState, botId: string): ServerPlayer[] {
   return list;
 }
 
-function scoreThreat(p: ServerPlayer): number {
-  return p.file.length * 10 + p.hand.length + (p.file.length >= 3 ? 20 : 0) - (p.isFrozen ? 4 : 0);
+function scoreOpponentThreat(p: ServerPlayer): number {
+  const filled = p.dossierSlots.filter(Boolean).length;
+  return filled * 12 + p.hand.length * 2 - (p.isFrozen ? 4 : 0);
 }
 
-function getPlayableCards(
-  hand: Card[],
-  playerFile: DocumentCardType[],
-  medhatVacationActive: boolean,
-): Card[] {
-  return hand.filter(c => {
-    const error = getCardPlayError(c.cardType, playerFile, medhatVacationActive);
-    return error === null;
+function isTrapOrBad(type?: CardType | null): boolean {
+  if (!type) return false;
+  return type === 'fake_paper' || type === 'violation_ticket' || getCardDef(type).category === 'prank';
+}
+
+function pickTargetOwnSlotForDoc(bot: ServerPlayer, docType: DocumentCardType): number {
+  const mem = bot.botMemory[bot.id] || {};
+  const pref = PREFERRED_DOC_SLOT[docType];
+
+  const prefCard = bot.dossierSlots[pref];
+  const prefKnown = mem[pref];
+  if (!prefCard) return pref;
+  if (isTrapOrBad(prefKnown) || !prefKnown || (prefKnown && !isDocumentCard(prefKnown))) {
+    return pref;
+  }
+
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    if (!bot.dossierSlots[i]) return i;
+  }
+
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    const k = mem[i];
+    if (isTrapOrBad(k) || (k && !isDocumentCard(k))) {
+      return i;
+    }
+  }
+
+  const docCounts = new Map<string, number>();
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    const k = mem[i];
+    if (k && isDocumentCard(k)) docCounts.set(k, (docCounts.get(k) || 0) + 1);
+  }
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    const k = mem[i];
+    if (k && isDocumentCard(k) && (docCounts.get(k) || 0) > 1) {
+      return i;
+    }
+  }
+
+  for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+    if (!mem[i]) return i;
+  }
+
+  return pref;
+}
+
+function pickBurnCard(bot: ServerPlayer, excludeCardId: string, neededDocs: DocumentCardType[]): Card | undefined {
+  const candidates = bot.hand.filter(c => c.instanceId !== excludeCardId);
+  if (candidates.length === 0) return undefined;
+
+  return [...candidates].sort((a, b) => {
+    const score = (c: Card) => {
+      if (c.cardType === 'violation_ticket') return -120;
+      if (c.cardType === 'fake_paper') return -100;
+      if (isDocumentCard(c.cardType) && neededDocs.includes(c.cardType)) return 95;
+      if (isDocumentCard(c.cardType)) return 20;
+      return CARD_PRIORITY[c.cardType] ?? 30;
+    };
+    return score(a) - score(b);
+  })[0];
+}
+
+// === Draw Decision ===
+
+export function decideBotDraw(state: ServerGameState, bot: ServerPlayer): BotDrawDecision {
+  const needed = getNeededDocsFromMemory(bot);
+  let bestIdx = -1;
+  let bestVal = 0;
+
+  state.openMarket.forEach((card, idx) => {
+    if (!card) return;
+    let val = 0;
+    if (isDocumentCard(card.cardType) && needed.includes(card.cardType)) {
+      val = card.cardType === 'eagle_seal' ? 120 : 85;
+    } else if (
+      card.cardType === 'breakfast_break' ||
+      card.cardType === 'show_me_all' ||
+      card.cardType === 'desk_swap' ||
+      card.cardType === 'wasta' ||
+      card.cardType === 'drawer_peek'
+    ) {
+      val = CARD_PRIORITY[card.cardType];
+    }
+    if (val > bestVal) {
+      bestVal = val;
+      bestIdx = idx;
+    }
   });
+
+  if (bestIdx !== -1 && bestVal >= 62) {
+    return { source: 'market', marketIndex: bestIdx };
+  }
+
+  return { source: 'deck' };
 }
 
-function getThreateningOpponents(state: ServerGameState, botId: string): ServerPlayer[] {
-  return getOpponents(state, botId)
-    .filter(p => p.file.length >= 2)
-    .sort((a, b) => scoreThreat(b) - scoreThreat(a));
-}
+// === Main Action Decision ===
 
-function randomDelay(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// === Main Bot Decision Functions ===
-
-/**
- * Decide what action the bot should take during ACTION_PHASE.
- * Returns a BotAction or null if the bot should end its turn.
- */
 export function decideBotAction(
   state: ServerGameState,
   bot: ServerPlayer,
+  roundNumber: number,
+  windowClosedByPlayerId: string | null,
+  matchedThisTurn: boolean,
 ): BotAction {
   const medhatActive = state.globalEffects.medhatVacationUntilPlayerId !== null;
-  const playable = getPlayableCards(bot.hand, bot.file, medhatActive);
-  const opponents = getOpponents(state, bot.id);
+  const needed = getNeededDocsFromMemory(bot);
+  const fairTargets = getNonImmuneOpponents(state, bot.id).sort((a, b) => scoreOpponentThreat(b) - scoreOpponentThreat(a));
+  const allOpps = getAllOpponents(state, bot.id).sort((a, b) => scoreOpponentThreat(b) - scoreOpponentThreat(a));
+  const mem = bot.botMemory[bot.id] || {};
+  const topDiscard = state.discardPile.length > 0 ? state.discardPile[state.discardPile.length - 1] : null;
+  const nextPlayer = getNextPlayer(state);
+  const prevPlayer = getPrevPlayer(state);
 
-  // If no playable cards, end turn
-  if (playable.length === 0) {
-    return { type: 'end_turn' };
+  // 1. Free Match / Basra if known trap/non-unique matches top of Archive
+  if (!matchedThisTurn && topDiscard) {
+    for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+      if (!bot.dossierSlots[i]) continue;
+      const known = mem[i];
+      if (!known || known !== topDiscard.cardType) continue;
+      const isTrapOrExtra =
+        isTrapOrBad(known) ||
+        !isDocumentCard(known) ||
+        bot.hand.some(h => h.cardType === known);
+      if (isTrapOrExtra) {
+        return { type: 'match_archive', slotIndex: i };
+      }
+    }
   }
 
-  // --- Priority 1: Play eagle_seal if eligible ---
-  const eagleSeal = playable.find(c => c.cardType === 'eagle_seal');
-  if (eagleSeal && canPlayEagleSeal(bot.file)) {
+  // 2. Place needed green document from hand into dossier
+  for (const docType of ['eagle_seal', 'manager_sign', 'stamp_duty', 'id_copy'] as DocumentCardType[]) {
+    if (!needed.includes(docType)) continue;
+    const card = bot.hand.find(c => c.cardType === docType);
+    if (!card) continue;
+    if (docType === 'manager_sign' && medhatActive) continue;
+    const targetSlot = pickTargetOwnSlotForDoc(bot, docType);
     return {
-      type: 'play_card',
-      cardInstanceId: eagleSeal.instanceId,
+      type: 'place_in_slot',
+      cardInstanceId: card.instanceId,
+      slotIndex: targetSlot,
     };
   }
 
-  // --- Priority 2: Play any needed core document ---
-  const neededCoreDocs = getNeededCoreDocs(bot);
-  for (const neededDoc of neededCoreDocs) {
-    const card = playable.find(c => c.cardType === neededDoc);
-    if (card) {
+  // 3. Close Window check
+  if (roundNumber >= GAME_CONSTANTS.MIN_ROUND_TO_CLOSE_WINDOW && !windowClosedByPlayerId) {
+    const est = getKnownSlotScoreEstimate(bot);
+    if (
+      (est.uniqueDocs === 4 && est.traps === 0) ||
+      (roundNumber >= 6 && est.uniqueDocs >= 3 && est.knownCount === 4 && est.traps === 0) ||
+      (roundNumber >= 10 && est.uniqueDocs >= 2 && est.knownCount >= 3 && est.traps === 0 && Math.random() < 0.45)
+    ) {
+      return { type: 'close_window' };
+    }
+  }
+
+  // 4. "وريني كده اللي معاك" (show_me_all — table-wide unseen inspect!)
+  const showMeAll = bot.hand.find(c => c.cardType === 'show_me_all');
+  if (showMeAll) {
+    const multiTargets: Record<string, number> = {};
+    for (const p of state.players) {
+      const pMem = bot.botMemory[p.id] || {};
+      let slotIdx = p.dossierSlots.findIndex((c, idx) => c !== null && !pMem[idx]);
+      if (slotIdx === -1) {
+        slotIdx = p.dossierSlots.findIndex(c => c !== null);
+      }
+      if (slotIdx !== -1) {
+        multiTargets[p.id] = slotIdx;
+      }
+    }
+    if (Object.keys(multiTargets).length > 0) {
       return {
         type: 'play_card',
-        cardInstanceId: card.instanceId,
+        cardInstanceId: showMeAll.instanceId,
+        multiTargets,
       };
     }
   }
 
-  // --- Priority 3: Hit threatening opponents (prioritize 3/4 leaders, then 2/4 leaders) ---
-  const threatening = getThreateningOpponents(state, bot.id);
-  const criticalThreat = threatening.find(p => p.file.length >= 3);
-  if (criticalThreat) {
-    const topThreat = criticalThreat;
-
-    // Try file_lost first (most devastating)
-    const fileLost = playable.find(c => c.cardType === 'file_lost');
-    if (fileLost && topThreat.file.length > 0) {
-      return {
-        type: 'play_card',
-        cardInstanceId: fileLost.instanceId,
-        targetPlayerId: topThreat.id,
-      };
-    }
-
-    // Try come_tomorrow (remove a specific doc)
-    const comeTomorrow = playable.find(c => c.cardType === 'come_tomorrow');
-    if (comeTomorrow && topThreat.file.length > 0) {
-      const targetDoc = pickBestDocToRemove(topThreat);
-      if (targetDoc) {
+  // 5. Peek single slot with drawer_peek
+  const peekCard = bot.hand.find(c => c.cardType === 'drawer_peek');
+  if (peekCard) {
+    for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+      if (bot.dossierSlots[i] && !mem[i]) {
         return {
           type: 'play_card',
-          cardInstanceId: comeTomorrow.instanceId,
-          targetPlayerId: topThreat.id,
-          targetDocument: targetDoc,
+          cardInstanceId: peekCard.instanceId,
+          targetPlayerId: bot.id,
+          targetSlotIndex: i,
         };
       }
     }
+    const leader = allOpps[0];
+    if (leader) {
+      const idx = leader.dossierSlots.findIndex((c, i) => Boolean(c) && !bot.botMemory[leader.id]?.[i]);
+      if (idx !== -1) {
+        return {
+          type: 'play_card',
+          cardInstanceId: peekCard.instanceId,
+          targetPlayerId: leader.id,
+          targetSlotIndex: idx,
+        };
+      }
+    }
+  }
 
-    // Try wasta (steal a doc the bot needs)
-    const wasta = playable.find(c => c.cardType === 'wasta');
+  // 6. Blind Desk Swap against non-immune opponent (dump violation_ticket / fake_paper / prank!)
+  const deskSwap = bot.hand.find(c => c.cardType === 'desk_swap');
+  if (deskSwap && fairTargets.length > 0) {
+    let badOwnSlot = -1;
+    for (let i = 0; i < GAME_CONSTANTS.DOSSIER_SLOTS; i++) {
+      if (!bot.dossierSlots[i]) continue;
+      const k = mem[i];
+      if (isTrapOrBad(k) || (k && !isDocumentCard(k))) {
+        badOwnSlot = i;
+        break;
+      }
+    }
+    if (badOwnSlot !== -1) {
+      for (const opp of fairTargets) {
+        const oppMem = bot.botMemory[opp.id] || {};
+        let targetSlot = opp.dossierSlots.findIndex(
+          (c, idx) => c !== null && oppMem[idx] && isDocumentCard(oppMem[idx]!),
+        );
+        if (targetSlot === -1) {
+          targetSlot = opp.dossierSlots.findIndex(c => c !== null);
+        }
+        if (targetSlot !== -1) {
+          return {
+            type: 'play_card',
+            cardInstanceId: deskSwap.instanceId,
+            ownSlotIndex: badOwnSlot,
+            targetPlayerId: opp.id,
+            targetSlotIndex: targetSlot,
+          };
+        }
+      }
+    }
+  }
+
+  // 7. Positional neighbor attacks (no manual targeting!)
+  const systemDown = bot.hand.find(c => c.cardType === 'system_down');
+  if (systemDown && nextPlayer && !nextPlayer.isFrozen) {
+    return { type: 'play_card', cardInstanceId: systemDown.instanceId };
+  }
+
+  const missingPapers = bot.hand.find(c => c.cardType === 'missing_papers');
+  if (missingPapers && nextPlayer && nextPlayer.hand.length >= 2) {
+    return { type: 'play_card', cardInstanceId: missingPapers.instanceId };
+  }
+
+  // 8. Non-immune targeted steals/sabotage on biggest threat
+  const topFairThreat = fairTargets[0];
+  if (topFairThreat) {
+    const wasta = bot.hand.find(c => c.cardType === 'wasta');
     if (wasta) {
-      const stealTarget = findBestWastaTarget(state, bot);
-      if (stealTarget) {
+      const burn = pickBurnCard(bot, wasta.instanceId, needed);
+      const targetSlot = topFairThreat.dossierSlots.findIndex(c => c !== null);
+      if (burn && targetSlot !== -1) {
+        const ownSlot = pickTargetOwnSlotForDoc(bot, 'stamp_duty');
         return {
           type: 'play_card',
           cardInstanceId: wasta.instanceId,
-          targetPlayerId: stealTarget.targetPlayerId,
-          targetDocument: stealTarget.targetDocument,
+          targetPlayerId: topFairThreat.id,
+          targetSlotIndex: targetSlot,
+          ownSlotIndex: ownSlot,
+          burnCardInstanceId: burn.instanceId,
         };
       }
     }
 
-    // Try system_down (freeze threatening opponent)
-    const systemDown = playable.find(c => c.cardType === 'system_down');
-    if (systemDown && !topThreat.isFrozen) {
-      return {
-        type: 'play_card',
-        cardInstanceId: systemDown.instanceId,
-        targetPlayerId: topThreat.id,
-      };
-    }
-
-    // Try missing_papers
-    const missingPapers = playable.find(c => c.cardType === 'missing_papers');
-    if (missingPapers && topThreat.hand.length > 0) {
-      return {
-        type: 'play_card',
-        cardInstanceId: missingPapers.instanceId,
-        targetPlayerId: topThreat.id,
-      };
-    }
-  }
-
-  // --- Priority 4: Utility cards ---
-  // Play recommendation if hand <= 4
-  const recommendation = playable.find(c => c.cardType === 'recommendation');
-  if (recommendation && bot.hand.length <= 4) {
-    return {
-      type: 'play_card',
-      cardInstanceId: recommendation.instanceId,
-    };
-  }
-
-  // Play uncle_gamal if a needed card is in discard pile
-  const uncleGamal = playable.find(c => c.cardType === 'uncle_gamal');
-  if (uncleGamal && state.discardPile.length > 0) {
-    const neededDocs = getNeededDocs(bot);
-    const hasNeededInDiscard = state.discardPile.some(c =>
-      neededDocs.includes(c.cardType as DocumentCardType) || c.cardType === 'eagle_seal',
-    );
-    if (hasNeededInDiscard) {
-      return {
-        type: 'play_card',
-        cardInstanceId: uncleGamal.instanceId,
-      };
-    }
-  }
-
-  // --- Priority 5: Opportunistic attacks on any opponent ---
-  // Try window_4 only if bot's hand is small and target has noticeably more cards, and bot doesn't hold eagle_seal
-  const window4 = playable.find(c => c.cardType === 'window_4');
-  const holdsEagleSeal = bot.hand.some(c => c.cardType === 'eagle_seal');
-  if (window4 && !holdsEagleSeal && bot.hand.length <= 3) {
-    const targetOpponent = opponents
-      .filter(p => p.hand.length > bot.hand.length + 1)
-      .sort((a, b) => b.hand.length - a.hand.length)[0];
-    if (targetOpponent) {
-      return {
-        type: 'play_card',
-        cardInstanceId: window4.instanceId,
-        targetPlayerId: targetOpponent.id,
-      };
-    }
-  }
-
-  // Try wasta on any opponent who has a document bot still needs (even if <3 docs)
-  const wastaAny = playable.find(c => c.cardType === 'wasta');
-  if (wastaAny) {
-    const stealTarget = findBestWastaTarget(state, bot);
-    if (stealTarget) {
-      return {
-        type: 'play_card',
-        cardInstanceId: wastaAny.instanceId,
-        targetPlayerId: stealTarget.targetPlayerId,
-        targetDocument: stealTarget.targetDocument,
-      };
-    }
-  }
-
-  // Try medhat_vacation if an opponent needs manager_sign (or has >= 1 doc)
-  const medhat = playable.find(c => c.cardType === 'medhat_vacation');
-  if (medhat && !medhatActive) {
-    const opponentNeedsManagerSign = opponents.some(
-      p => p.file.length >= 1 && !p.file.includes('manager_sign'),
-    );
-    if (opponentNeedsManagerSign) {
-      return {
-        type: 'play_card',
-        cardInstanceId: medhat.instanceId,
-      };
-    }
-  }
-
-  // --- Fallback: Play useful disruptive cards without hurting self ---
-  const expendable = playable.filter(c => {
-    if (c.cardType === 'eagle_seal') return false;
-    if (c.cardType === 'breakfast_break') return false;
-    if (c.cardType === 'window_4') return false;
-    // Save strong pranks if nobody is even ahead yet unless bot's hand is getting full
-    if (bot.hand.length <= 5) {
-      if (c.cardType === 'file_lost' && !opponents.some(p => p.file.length >= 2)) return false;
-      if (c.cardType === 'come_tomorrow' && !opponents.some(p => p.file.length >= 2)) return false;
-      if (c.cardType === 'system_down' && !opponents.some(p => p.file.length >= 1) && Math.random() < 0.65) return false;
-      if (c.cardType === 'missing_papers' && !opponents.some(p => p.hand.length >= 5) && Math.random() < 0.6) return false;
-    }
-    if (c.cardType === 'file_lost' && bot.hand.length <= GAME_CONSTANTS.MAX_HAND_SIZE) {
-      return opponents.some(p => p.file.length >= 2);
-    }
-    // Only play uncle_gamal if discardPile has useful cards
-    if (c.cardType === 'uncle_gamal') {
-      const neededDocs = getNeededDocs(bot);
-      return state.discardPile.some(d =>
-        neededDocs.includes(d.cardType as DocumentCardType) ||
-        d.cardType === 'eagle_seal' ||
-        d.cardType === 'breakfast_break' ||
-        d.cardType === 'wasta' ||
-        d.cardType === 'file_lost',
-      );
-    }
-    if (c.cardType === 'recommendation' && bot.hand.length >= GAME_CONSTANTS.MAX_HAND_SIZE) {
-      return false;
-    }
-    return true;
-  });
-
-  if (expendable.length > 0) {
-    for (const card of expendable) {
-      const def = getCardDef(card.cardType);
-      if (def.targetsOpponent) {
-        const validTarget = findValidTarget(state, bot, card);
-        if (validTarget) {
-          return {
-            type: 'play_card',
-            cardInstanceId: card.instanceId,
-            targetPlayerId: validTarget.targetPlayerId,
-            targetDocument: validTarget.targetDocument,
-          };
-        }
-      } else if (!def.isReactionOnly) {
+    const fileLost = bot.hand.find(c => c.cardType === 'file_lost');
+    const filledCount = topFairThreat.dossierSlots.filter(Boolean).length;
+    if (fileLost && filledCount >= 3) {
+      const burn = pickBurnCard(bot, fileLost.instanceId, needed);
+      if (burn) {
         return {
           type: 'play_card',
-          cardInstanceId: card.instanceId,
+          cardInstanceId: fileLost.instanceId,
+          targetPlayerId: topFairThreat.id,
+          burnCardInstanceId: burn.instanceId,
         };
+      }
+    }
+
+    const comeTomorrow = bot.hand.find(c => c.cardType === 'come_tomorrow');
+    if (comeTomorrow && filledCount >= 2) {
+      const oppMem = bot.botMemory[topFairThreat.id] || {};
+      let targetSlot = topFairThreat.dossierSlots.findIndex(
+        (c, idx) => c !== null && oppMem[idx] && isDocumentCard(oppMem[idx]!),
+      );
+      if (targetSlot === -1) {
+        targetSlot = topFairThreat.dossierSlots.findIndex(c => c !== null);
+      }
+      if (targetSlot !== -1) {
+        return {
+          type: 'play_card',
+          cardInstanceId: comeTomorrow.instanceId,
+          targetPlayerId: topFairThreat.id,
+          targetSlotIndex: targetSlot,
+        };
+      }
+    }
+  }
+
+  // 9. Previous neighbor window_4 if hand is tiny and prev has more cards
+  const window4 = bot.hand.find(c => c.cardType === 'window_4');
+  if (window4 && prevPlayer && bot.hand.length <= 2 && prevPlayer.hand.length > bot.hand.length + 1) {
+    return { type: 'play_card', cardInstanceId: window4.instanceId };
+  }
+
+  // 10. Utilities: dossier_sort, uncle_gamal, recommendation, medhat_vacation
+  const sortCard = bot.hand.find(c => c.cardType === 'dossier_sort');
+  if (sortCard && state.deck.length >= 2) {
+    return { type: 'play_card', cardInstanceId: sortCard.instanceId };
+  }
+
+  const uncleGamal = bot.hand.find(c => c.cardType === 'uncle_gamal');
+  if (uncleGamal && state.discardPile.length > 0) {
+    const goodInArchive = state.discardPile.some(
+      c => (isDocumentCard(c.cardType) && needed.includes(c.cardType)) || c.cardType === 'breakfast_break',
+    );
+    if (goodInArchive) {
+      return { type: 'play_card', cardInstanceId: uncleGamal.instanceId };
+    }
+  }
+
+  const rec = bot.hand.find(c => c.cardType === 'recommendation');
+  if (rec && bot.hand.length <= 4) {
+    return { type: 'play_card', cardInstanceId: rec.instanceId };
+  }
+
+  const medhat = bot.hand.find(c => c.cardType === 'medhat_vacation');
+  if (medhat && !medhatActive) {
+    return { type: 'play_card', cardInstanceId: medhat.instanceId };
+  }
+
+  // 11. Trim excess hand if near cap
+  if (bot.hand.length >= 5) {
+    for (const c of bot.hand) {
+      if (getCardPlayError(c.cardType, bot.file, medhatActive, { handCount: bot.hand.length }) !== null) {
+        continue;
+      }
+      const def = getCardDef(c.cardType);
+      if (c.cardType === 'breakfast_break' || c.cardType === 'window_4' || c.cardType === 'file_lost' || c.cardType === 'wasta') continue;
+      if (!def.targetsOpponent && !def.targetsAnySlot && !def.positionalTarget) {
+        if (c.cardType === 'uncle_gamal' && state.discardPile.length === 0) continue;
+        return { type: 'play_card', cardInstanceId: c.instanceId };
       }
     }
   }
@@ -327,237 +472,65 @@ export function decideBotAction(
   return { type: 'end_turn' };
 }
 
-/**
- * Find a valid target for a targeted card.
- */
-function findValidTarget(
-  state: ServerGameState,
-  bot: ServerPlayer,
-  card: Card,
-): { targetPlayerId: string; targetDocument?: DocumentCardType } | null {
-  // getOpponents() already randomizes order, so sorting by threat breaks ties fairly across all players
-  const opponents = [...getOpponents(state, bot.id)].sort((a, b) => scoreThreat(b) - scoreThreat(a));
+export function shouldBlock(bot: ServerPlayer, attackCardType: CardType): BotReactionDecision {
+  const hasBB = bot.hand.some(c => c.cardType === 'breakfast_break');
+  if (!hasBB) return { block: false };
 
-  if (card.cardType === 'missing_papers') {
-    const byHand = [...getOpponents(state, bot.id)].sort((a, b) => b.hand.length - a.hand.length);
-    const valid = byHand.find(opp => opp.hand.length > 0);
-    return valid ? { targetPlayerId: valid.id } : null;
-  }
-
-  for (const opp of opponents) {
-    switch (card.cardType) {
-      case 'system_down':
-        if (!opp.isFrozen) {
-          return { targetPlayerId: opp.id };
-        }
-        break;
-      case 'come_tomorrow':
-        if (opp.file.length > 0) {
-          const doc = pickBestDocToRemove(opp);
-          if (doc) return { targetPlayerId: opp.id, targetDocument: doc };
-        }
-        break;
-      case 'window_4':
-        return { targetPlayerId: opp.id };
-      case 'file_lost':
-        if (opp.file.length > 0) {
-          return { targetPlayerId: opp.id };
-        }
-        break;
-      case 'wasta': {
-        const stealable = opp.file.filter(doc => !bot.file.includes(doc));
-        if (stealable.length > 0) {
-          return { targetPlayerId: opp.id, targetDocument: stealable[0] };
-        }
-        break;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Pick the best document to remove from an opponent's file.
- * Prioritize eagle_seal prerequisites that are hard to get back.
- */
-function pickBestDocToRemove(target: ServerPlayer): DocumentCardType | undefined {
-  // Prioritize removing manager_sign (fewer copies in deck: 6 vs 8)
-  if (target.file.includes('manager_sign')) return 'manager_sign';
-  if (target.file.includes('stamp_duty')) return 'stamp_duty';
-  if (target.file.includes('id_copy')) return 'id_copy';
-  return target.file[0];
-}
-
-/**
- * Find the best target for wasta (steal a doc the bot needs).
- */
-function findBestWastaTarget(
-  state: ServerGameState,
-  bot: ServerPlayer,
-): { targetPlayerId: string; targetDocument: DocumentCardType } | null {
-  const neededDocs = getNeededCoreDocs(bot);
-  const opponents = getOpponents(state, bot.id);
-
-  // First priority: steal a doc the bot needs from the most threatening opponent
-  for (const opp of opponents.sort((a, b) => b.file.length - a.file.length)) {
-    for (const doc of neededDocs) {
-      if (opp.file.includes(doc) && !bot.file.includes(doc)) {
-        return { targetPlayerId: opp.id, targetDocument: doc };
-      }
-    }
-  }
-
-  // Fallback: steal any doc from most threatening opponent
-  for (const opp of opponents.sort((a, b) => b.file.length - a.file.length)) {
-    for (const doc of opp.file) {
-      if (!bot.file.includes(doc)) {
-        return { targetPlayerId: opp.id, targetDocument: doc };
-      }
-    }
-  }
-
-  return null;
-}
-
-// === Reaction Decision ===
-
-/**
- * Decide whether the bot should block an incoming attack with breakfast_break.
- */
-export function shouldBlock(
-  bot: ServerPlayer,
-  attackCardType: CardType,
-): BotReactionDecision {
-  const hasBreakfastBreak = bot.hand.some(c => c.cardType === 'breakfast_break');
-  if (!hasBreakfastBreak) {
-    return { block: false };
-  }
-
-  // Always block these devastating attacks
-  if (attackCardType === 'file_lost' || attackCardType === 'come_tomorrow' || attackCardType === 'wasta') {
+  if (attackCardType === 'file_lost' || attackCardType === 'wasta' || attackCardType === 'desk_swap' || attackCardType === 'come_tomorrow') {
     return { block: true };
   }
-
-  // Block system_down or missing_papers if bot has 2+ docs or holds eagle_seal
   if (attackCardType === 'system_down' || attackCardType === 'missing_papers') {
-    const hasManyDocs = bot.file.length >= 2;
-    const holdsEagleSeal = bot.hand.some(c => c.cardType === 'eagle_seal');
-    if (hasManyDocs || holdsEagleSeal) {
-      return { block: true };
-    }
+    return { block: bot.hand.length >= 3 || getKnownUniqueDocs(bot).size >= 2 };
   }
-
-  // Don't block window_4 if bot's hand is small (might benefit from swap)
-  if (attackCardType === 'window_4') {
-    if (bot.hand.length >= 4) {
-      return { block: true };
-    }
-  }
-
   return { block: false };
 }
 
-// === Discard Decision ===
-
-/**
- * Choose which cards to discard when hand exceeds 7.
- */
-export function chooseDiscard(
-  bot: ServerPlayer,
-  excessCount: number,
-): BotDiscardDecision {
-  const neededDocs = getNeededDocs(bot);
-  const sortedHand = [...bot.hand].sort((a, b) => {
-    // Never discard eagle_seal
-    if (a.cardType === 'eagle_seal') return 1;
-    if (b.cardType === 'eagle_seal') return -1;
-
-    // Never discard needed docs
-    const aNeeded = neededDocs.includes(a.cardType as DocumentCardType);
-    const bNeeded = neededDocs.includes(b.cardType as DocumentCardType);
-    if (aNeeded && !bNeeded) return 1;
-    if (!aNeeded && bNeeded) return -1;
-
-    // Prioritize keeping breakfast_break
-    if (a.cardType === 'breakfast_break' && b.cardType !== 'breakfast_break') return 1;
-    if (b.cardType === 'breakfast_break' && a.cardType !== 'breakfast_break') return -1;
-
-    // Discard duplicates first (cards the bot already has in file)
-    const aInFile = bot.file.includes(a.cardType as DocumentCardType);
-    const bInFile = bot.file.includes(b.cardType as DocumentCardType);
-    if (aInFile && !bInFile) return -1;
-    if (!aInFile && bInFile) return 1;
-
-    // Discard by card priority (lower priority discarded first)
-    return (CARD_PRIORITY[a.cardType] || 0) - (CARD_PRIORITY[b.cardType] || 0);
+export function chooseArchiveCard(bot: ServerPlayer, archiveCards: Card[]): BotArchiveDecision {
+  if (archiveCards.length === 0) return { cardInstanceId: '' };
+  const needed = getNeededDocsFromMemory(bot);
+  const scored = [...archiveCards].sort((a, b) => {
+    const score = (c: Card) => {
+      if (isDocumentCard(c.cardType) && needed.includes(c.cardType)) return 200;
+      return CARD_PRIORITY[c.cardType] ?? 10;
+    };
+    return score(b) - score(a);
   });
-
-  // Take the first excessCount cards to discard (lowest priority)
-  const toDiscard = sortedHand.slice(0, excessCount);
-  return {
-    cardInstanceIds: toDiscard.map(c => c.instanceId),
-  };
+  return { cardInstanceId: scored[0].instanceId };
 }
 
-// === Archive Decision (Uncle Gamal) ===
-
-/**
- * Choose which card to pick from the archive (discard pile).
- */
-export function chooseArchiveCard(
-  bot: ServerPlayer,
-  availableCards: Card[],
-): BotArchiveDecision {
-  if (availableCards.length === 0) {
-    // Shouldn't happen, but safety
-    return { cardInstanceId: '' };
-  }
-
-  const neededDocs = getNeededDocs(bot);
-
-  // Priority: pick eagle_seal if bot has all prerequisites
-  if (canPlayEagleSeal(bot.file)) {
-    const eagleSeal = availableCards.find(c => c.cardType === 'eagle_seal');
-    if (eagleSeal) {
-      return { cardInstanceId: eagleSeal.instanceId };
-    }
-  }
-
-  // Priority: pick a needed core document
-  for (const doc of neededDocs) {
-    const card = availableCards.find(c => c.cardType === doc);
-    if (card) {
-      return { cardInstanceId: card.instanceId };
-    }
-  }
-
-  // Priority: pick breakfast_break if bot doesn't have one
-  if (!bot.hand.some(c => c.cardType === 'breakfast_break')) {
-    const bb = availableCards.find(c => c.cardType === 'breakfast_break');
-    if (bb) {
-      return { cardInstanceId: bb.instanceId };
-    }
-  }
-
-  // Fallback: pick highest priority card
-  const sorted = [...availableCards].sort(
-    (a, b) => (CARD_PRIORITY[b.cardType] || 0) - (CARD_PRIORITY[a.cardType] || 0),
-  );
-  return { cardInstanceId: sorted[0].instanceId };
+export function chooseDiscard(bot: ServerPlayer, count: number): BotDiscardDecision {
+  const needed = getNeededDocsFromMemory(bot);
+  const scored = [...bot.hand].sort((a, b) => {
+    const score = (c: Card) => {
+      if (c.cardType === 'violation_ticket') return -120;
+      if (c.cardType === 'fake_paper') return -100;
+      if (isDocumentCard(c.cardType) && needed.includes(c.cardType)) return 150;
+      if (isDocumentCard(c.cardType)) return 25;
+      return CARD_PRIORITY[c.cardType] ?? 20;
+    };
+    return score(a) - score(b);
+  });
+  return { cardInstanceIds: scored.slice(0, count).map(c => c.instanceId) };
 }
 
-// === Bot Timing ===
+export function chooseSortDeckOrder(bot: ServerPlayer, topCards: Card[]): string[] {
+  const needed = getNeededDocsFromMemory(bot);
+  const sorted = [...topCards].sort((a, b) => {
+    const score = (c: Card) => {
+      if (isDocumentCard(c.cardType) && needed.includes(c.cardType)) return 150;
+      return CARD_PRIORITY[c.cardType] ?? 20;
+    };
+    return score(b) - score(a);
+  });
+  return sorted.map(c => c.instanceId);
+}
 
-/**
- * Get a natural delay for bot turn actions (800-1200ms)
- */
 export function getBotTurnDelay(): number {
-  return randomDelay(GAME_CONSTANTS.BOT_MIN_DELAY_MS, GAME_CONSTANTS.BOT_MAX_DELAY_MS);
+  return Math.floor(Math.random() * (GAME_CONSTANTS.BOT_MAX_DELAY_MS - GAME_CONSTANTS.BOT_MIN_DELAY_MS + 1)) +
+    GAME_CONSTANTS.BOT_MIN_DELAY_MS;
 }
 
-/**
- * Get a natural delay for bot reactions (1500-3000ms)
- */
 export function getBotReactionDelay(): number {
-  return randomDelay(GAME_CONSTANTS.BOT_REACTION_MIN_MS, GAME_CONSTANTS.BOT_REACTION_MAX_MS);
+  return Math.floor(Math.random() * (GAME_CONSTANTS.BOT_REACTION_MAX_MS - GAME_CONSTANTS.BOT_REACTION_MIN_MS + 1)) +
+    GAME_CONSTANTS.BOT_REACTION_MIN_MS;
 }
