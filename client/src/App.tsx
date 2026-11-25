@@ -13,14 +13,13 @@ import { GameBoard } from './components/GameBoard';
 import { TargetModal } from './components/TargetModal';
 import { ReactionModal } from './components/ReactionModal';
 import { ArchiveModal } from './components/ArchiveModal';
-import { DeckSortModal } from './components/DeckSortModal';
 import { TargetDiscardModal } from './components/TargetDiscardModal';
 import { DiscardModal } from './components/DiscardModal';
-import { CardCounterModal } from './components/CardCounterModal';
 import { CardZoomModal } from './components/CardZoomModal';
 import { StickerModal } from './components/StickerModal';
 import { RulesModal } from './components/RulesModal';
 import { GameOverModal } from './components/GameOverModal';
+import { preloadGameAssets } from './config/assets';
 import { WifiOff } from 'lucide-react';
 
 class AppErrorBoundary extends React.Component<
@@ -71,13 +70,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const cleanup = setupSocketListeners(socket, play);
+    preloadGameAssets();
     return cleanup;
   }, [socket, play, setupSocketListeners]);
 
   return (
     <AppErrorBoundary>
-      <div className="h-full w-full flex items-center justify-center bg-[#2A1C16] sm:p-2 overflow-hidden">
-        <div className="safe-phone-frame h-full w-full sm:h-[min(96dvh,920px)] sm:w-[clamp(420px,54dvh,520px)] sm:max-w-[96vw] sm:rounded-[28px] sm:border-[3px] sm:border-ink sm:shadow-[0_24px_60px_rgba(0,0,0,0.55)] font-cairo bg-manila text-ink relative overflow-hidden">
+      <div className="h-full w-full flex items-center justify-center bg-[#2A1C16] lg:p-3 overflow-hidden">
+        <div className="safe-phone-frame h-full w-full lg:h-[min(96dvh,960px)] lg:w-[clamp(460px,58dvh,640px)] lg:max-w-[95vw] lg:rounded-[28px] lg:border-[3px] lg:border-ink lg:shadow-[0_24px_60px_rgba(0,0,0,0.55)] font-cairo bg-manila text-ink relative overflow-hidden">
           {screen === 'lobby' && (
             <div className="h-full w-full">
               <Lobby />
@@ -98,10 +98,8 @@ const App: React.FC = () => {
           <TargetModal />
           <ReactionModal />
           <ArchiveModal />
-          <DeckSortModal />
           <TargetDiscardModal />
           <DiscardModal />
-          <CardCounterModal />
           <CardZoomModal />
           <StickerModal />
           <RulesModal />

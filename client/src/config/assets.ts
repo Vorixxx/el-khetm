@@ -11,47 +11,44 @@ const BRANDING_PATH = '/assets/branding';
 
 // === Card Images ===
 export const CARD_IMAGES: Record<CardType, string> = {
-  id_copy: `${CARDS_PATH}/id_copy.jpg`,
-  stamp_duty: `${CARDS_PATH}/stamp_duty.jpg`,
-  manager_sign: `${CARDS_PATH}/manager_sign.jpg`,
-  eagle_seal: `${CARDS_PATH}/eagle_seal.jpg`,
-  fake_paper: `${CARDS_PATH}/fake_paper.jpg`,
-  violation_ticket: `${CARDS_PATH}/violation_ticket.svg`,
-  system_down: `${CARDS_PATH}/system_down.jpg`,
-  come_tomorrow: `${CARDS_PATH}/come_tomorrow.jpg`,
-  missing_papers: `${CARDS_PATH}/missing_papers.jpg`,
-  window_4: `${CARDS_PATH}/window_4.jpg`,
-  medhat_vacation: `${CARDS_PATH}/medhat_vacation.jpg`,
-  file_lost: `${CARDS_PATH}/file_lost.jpg`,
-  breakfast_break: `${CARDS_PATH}/breakfast_break.jpg`,
-  wasta: `${CARDS_PATH}/wasta.jpg`,
-  drawer_peek: `${CARDS_PATH}/drawer_peek.jpg`,
+  id_copy: `${CARDS_PATH}/id_copy.webp`,
+  stamp_duty: `${CARDS_PATH}/stamp_duty.webp`,
+  manager_sign: `${CARDS_PATH}/manager_sign.webp`,
+  eagle_seal: `${CARDS_PATH}/eagle_seal.webp`,
+  system_down: `${CARDS_PATH}/system_down.webp`,
+  come_tomorrow: `${CARDS_PATH}/come_tomorrow.webp`,
+  missing_papers: `${CARDS_PATH}/missing_papers.webp`,
+  window_4: `${CARDS_PATH}/window_4.webp`,
+  medhat_vacation: `${CARDS_PATH}/medhat_vacation.webp`,
+  file_lost: `${CARDS_PATH}/file_lost.webp`,
+  breakfast_break: `${CARDS_PATH}/breakfast_break.webp`,
+  wasta: `${CARDS_PATH}/wasta.webp`,
+  drawer_peek: `${CARDS_PATH}/drawer_peek.webp`,
   show_me_all: `${CARDS_PATH}/show_me_all.svg`,
   desk_swap: `${CARDS_PATH}/desk_swap.svg`,
-  dossier_sort: `${CARDS_PATH}/dossier_sort.svg`,
-  recommendation: `${CARDS_PATH}/recommendation.jpg`,
-  uncle_gamal: `${CARDS_PATH}/uncle_gamal.jpg`,
+  recommendation: `${CARDS_PATH}/recommendation.webp`,
+  uncle_gamal: `${CARDS_PATH}/uncle_gamal.webp`,
 };
 
-export const CARD_BACK = `${CARDS_PATH}/card_back.jpg`;
+export const CARD_BACK = `${CARDS_PATH}/card_back.webp`;
 
 // === Avatar Images ===
 export const AVATAR_IMAGES: Record<AvatarId, string> = {
-  student: `${AVATARS_PATH}/avatar_student.png`,
-  employee: `${AVATARS_PATH}/avatar_employee.png`,
-  manager: `${AVATARS_PATH}/avatar_manager.png`,
-  bot: `${AVATARS_PATH}/avatar_bot.png`,
+  student: `${AVATARS_PATH}/avatar_student.webp`,
+  employee: `${AVATARS_PATH}/avatar_employee.webp`,
+  manager: `${AVATARS_PATH}/avatar_manager.webp`,
+  bot: `${AVATARS_PATH}/avatar_bot.webp`,
 };
 
 // === Backgrounds ===
 export const BACKGROUNDS = {
-  lobby_mobile: `${BACKGROUNDS_PATH}/lobby_bg_mobile.jpg`,
-  table_mobile: `${BACKGROUNDS_PATH}/table_bg_mobile.jpg`,
+  lobby_mobile: `${BACKGROUNDS_PATH}/lobby_bg_mobile.webp`,
+  table_mobile: `${BACKGROUNDS_PATH}/table_bg_mobile.webp`,
 };
 
 // === Branding ===
 export const BRANDING = {
-  logo: `${BRANDING_PATH}/logo.png`,
+  logo: `${BRANDING_PATH}/logo.webp`,
   appIcon: `${BRANDING_PATH}/app_icon.png`,
 };
 
@@ -59,9 +56,9 @@ export const BRANDING = {
 const STICKERS_PATH = '/assets/stickers';
 
 export const STICKER_IMAGES: Record<string, string> = {
-  this_is_fine: `${STICKERS_PATH}/this_is_fine.jpg`,
-  stonks: `${STICKERS_PATH}/stonks.jpg`,
-  surprised_shock: `${STICKERS_PATH}/surprised_shock.jpg`,
+  this_is_fine: `${STICKERS_PATH}/this_is_fine.webp`,
+  stonks: `${STICKERS_PATH}/stonks.webp`,
+  surprised_shock: `${STICKERS_PATH}/surprised_shock.webp`,
   table_cat: `${STICKERS_PATH}/table_cat.svg`,
   crying_laugh: `${STICKERS_PATH}/crying_laugh.svg`,
   big_brain: `${STICKERS_PATH}/big_brain.svg`,
@@ -70,13 +67,12 @@ export const STICKER_IMAGES: Record<string, string> = {
 };
 
 export function getStickerImage(stickerId: string): string {
-  return STICKER_IMAGES[stickerId] || `${STICKERS_PATH}/this_is_fine.jpg`;
+  return STICKER_IMAGES[stickerId] || `${STICKERS_PATH}/this_is_fine.webp`;
 }
 
 // === Category Colors ===
 const CATEGORY_COLORS: Record<string, string> = {
   document: '#15803D',
-  trap: '#64748B',
   prank: '#B91C1C',
   utility: '#1D4ED8',
 };
@@ -115,6 +111,33 @@ export function getBackground(name: keyof typeof BACKGROUNDS): string {
 
 export function getCardBack(): string {
   return CARD_BACK;
+}
+
+let preloaded = false;
+export function preloadGameAssets(): void {
+  if (preloaded || typeof window === 'undefined') return;
+  preloaded = true;
+  const urls = [
+    CARD_BACK,
+    BACKGROUNDS.table_mobile,
+    ...Object.values(AVATAR_IMAGES),
+    ...Object.values(CARD_IMAGES),
+    ...Object.values(STICKER_IMAGES),
+  ];
+  // Stagger preloading slightly across frames so initial paint stays instant
+  let idx = 0;
+  const batch = () => {
+    const end = Math.min(idx + 5, urls.length);
+    for (; idx < end; idx++) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = urls[idx];
+    }
+    if (idx < urls.length) {
+      setTimeout(batch, 120);
+    }
+  };
+  setTimeout(batch, 350);
 }
 
 export const CARD_BACK_FALLBACK_CSS = `

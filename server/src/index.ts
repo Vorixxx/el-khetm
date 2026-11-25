@@ -85,8 +85,10 @@ app.use(express.static(clientDistDir, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('index.html')) {
       res.setHeader('Cache-Control', 'no-cache');
-    } else if (/assets[\\/]index-.*\.(js|css)$/.test(filePath)) {
+    } else if (/assets[\\/]index-.*\.(js|css)$/.test(filePath) || /assets[\\/]vendor-.*\.(js)$/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (/\.(webp|png|jpg|svg)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800');
     }
   },
 }));

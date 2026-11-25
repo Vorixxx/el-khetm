@@ -58,7 +58,7 @@ export const Lobby: React.FC = () => {
       dir="rtl"
     >
       <motion.div
-        className="relative z-10 flex flex-col items-center gap-3.5 w-full max-w-sm mx-4 p-5 bg-manila/[0.96] rounded-2xl border-2 border-ink shadow-retro-lg"
+        className="relative z-10 flex flex-col items-center gap-3.5 w-full max-w-sm sm:max-w-md mx-4 p-5 bg-manila/[0.96] rounded-2xl border-2 border-ink shadow-retro-lg"
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -94,7 +94,9 @@ export const Lobby: React.FC = () => {
             </div>
           )}
           <h1 className="text-3xl font-cairo font-black text-ink tracking-tight">الختم</h1>
-          <p className="text-xs font-cairo font-bold text-ink/70">لعبة أوراق المصلحة — ذاكرة، خداع، وختم النسر!</p>
+          <p className="text-xs font-cairo font-bold text-ink/70 text-center">
+            جمّع الـ 4 ورقات الرسمية في ملفك المقفول قبل غيرك!
+          </p>
         </div>
 
         {/* Name Input */}
@@ -192,7 +194,7 @@ export const Lobby: React.FC = () => {
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-ink font-cairo font-bold rounded-lg border-2 border-ink shadow-retro-sm active:shadow-none transition-all"
           >
             <BookOpen size={17} />
-            طريقة اللعب والقواعد الجديدة
+            طريقة اللعب والقواعد
           </button>
         </div>
       </motion.div>

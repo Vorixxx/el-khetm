@@ -14,7 +14,7 @@ export const DiscardModal: React.FC = () => {
   const { socket } = useSocket();
   const { privateState, activeModal, closeModal, discardCards } = useGameStore();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [timeLeft, setTimeLeft] = useState(15);
+  const [timeLeft, setTimeLeft] = useState(18);
 
   const isOpen = activeModal === 'discard';
   const hand = privateState?.hand ?? [];
@@ -23,10 +23,10 @@ export const DiscardModal: React.FC = () => {
   useEffect(() => {
     if (!isOpen) return;
     setSelectedIds(new Set());
-    setTimeLeft(15);
+    setTimeLeft(18);
     const start = Date.now();
     const interval = setInterval(() => {
-      const remaining = Math.max(0, 15 - (Date.now() - start) / 1000);
+      const remaining = Math.max(0, 18 - (Date.now() - start) / 1000);
       setTimeLeft(remaining);
     }, 250);
     return () => clearInterval(interval);

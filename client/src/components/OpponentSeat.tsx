@@ -50,7 +50,6 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
   const activeSticker = useGameStore(s => s.activeStickers[player.id] ?? null);
   const privateState = useGameStore(s => s.privateState);
   const phase = useGameStore(s => s.publicState?.phase);
-  const windowClosedByPlayerId = useGameStore(s => s.publicState?.windowClosedByPlayerId);
   const recentSlotHighlights = useGameStore(s => s.publicState?.recentSlotHighlights);
   const [activeBubble, setActiveBubble] = useState<string | null>(null);
 
@@ -79,12 +78,11 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
 
   const isSide = position === 'left' || position === 'right';
   const stickerMeta = activeSticker ? MEME_STICKERS.find(s => s.id === activeSticker.stickerId) : null;
-  const isCloser = windowClosedByPlayerId === player.id;
 
   return (
     <div
       className={`relative flex flex-col items-center gap-0.5 select-none ${
-        isSide ? 'w-[clamp(58px,16.5vw,82px)]' : 'max-w-[290px]'
+        isSide ? 'w-[clamp(80px,20vw,112px)]' : 'max-w-[340px]'
       }`}
       dir="rtl"
     >
@@ -150,14 +148,13 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
 
       {/* Avatar + Name + Turn / Immunity Badge */}
       <motion.div
+        data-flight-anchor={`hand-${player.id}`}
         animate={player.isFrozen ? { scale: [1, 0.96, 1] } : {}}
         className={`flex items-center px-1.5 py-0.5 rounded-xl border-2 transition-all w-full justify-center ${
           isSide ? 'flex-col gap-0.5' : 'gap-1.5'
         } ${
           isCurrentTurn
             ? 'border-wasta-gold bg-white shadow-retro ring-2 ring-wasta-gold/55'
-            : isCloser
-            ? 'border-prank-red bg-white shadow-retro-sm ring-2 ring-prank-red/35'
             : player.isImmuneThisRound
             ? 'border-defense-blue bg-blue-50/90 shadow-retro-sm'
             : 'border-ink bg-manila/95 shadow-retro-sm'
@@ -206,9 +203,7 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
             <span>🃏{player.handCount}</span>
             <span>·</span>
             <span>
-              {isCloser
-                ? '🚨قفل'
-                : player.isFrozen
+              {player.isFrozen
                 ? '❄️'
                 : player.isImmuneThisRound
                 ? '🛡️محصّن'
@@ -218,13 +213,14 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
         </div>
       </motion.div>
 
-      {/* Responsive 4-Card Dossier with Live Change Highlights */}
+      {/* Responsive Upright 4-Card Dossier with Clear Slot Numbers */}
       <div
         className={
           isSide
-            ? 'flex flex-col items-center gap-[clamp(2px,0.4dvh,4px)] py-0.5'
+            ? 'grid grid-cols-2 gap-1 py-0.5 justify-items-center'
             : 'flex items-center justify-center gap-1 py-0.5'
         }
+        dir="rtl"
       >
         {player.dossierSlots.map((slot, idx) => {
           const singleMatch = activePeek?.targetPlayerId === player.id && activePeek.slotIndex === idx;
@@ -240,33 +236,33 @@ export const OpponentSeat: React.FC<OpponentSeatProps> = React.memo(({
           const slotHighlight = highlights.find(h => h.slotIndex === idx);
 
           const slotClass = isSide
-            ? 'w-[clamp(42px,12.5vw,56px)] h-[clamp(28px,4.1dvh,38px)]'
-            : 'w-[clamp(36px,10.5vw,48px)] aspect-[3/4]';
+            ? 'w-[clamp(36px,9.2vw,48px)] aspect-[3/4]'
+            : 'w-[clamp(42px,11vw,60px)] aspect-[3/4]';
 
           return (
             <motion.div
               key={`slot-${idx}`}
-              animate={slotHighlight ? { scale: [1, 1.14, 1], rotate: [0, -5, 5, 0] } : {}}
-              transition={{ duration: 0.45 }}
+              data-flight-anchor={`slot-${player.id}-${idx}`}
+              animate={slotHighlight ? { scale: [1, 1.18, 1], rotate: [0, -6, 6, 0] } : {}}
+              transition={{ duration: 0.5 }}
               className="relative"
             >
               {!slot.hasCard ? (
                 <div
                   className={`${slotClass} rounded-md border border-dashed ${
-                    slotHighlight ? 'border-prank-red bg-prank-red/20 ring-2 ring-prank-red' : 'border-ink/30 bg-manila/40'
+                    slotHighlight ? 'border-prank-red bg-prank-red/20 ring-2 ring-prank-red' : 'border-ink/35 bg-manila/55'
                   } flex items-center justify-center`}
                 >
-                  <span className="text-[8px] font-cairo font-bold text-ink/40">#{idx + 1}</span>
+                  <span className="text-[9px] font-cairo font-black text-ink/50">{idx + 1}</span>
                 </div>
               ) : (
                 <FlipCard
                   cardType={revealedCardType}
                   isRevealed={isRevealed}
-                  horizontalSide={isSide}
                   isHighlighted={singleMatch || Boolean(multiMatch) || Boolean(slotHighlight)}
                   sizeClass={slotClass}
                 >
-                  <span className="absolute top-0.5 right-0.5 bg-ink/80 text-white text-[7.5px] font-cairo font-black px-1 rounded pointer-events-none z-20">
+                  <span className="absolute top-0.5 right-0.5 bg-ink/90 text-wasta-gold text-[8.5px] font-cairo font-black px-1 rounded pointer-events-none z-20 border border-wasta-gold/40 leading-tight">
                     {idx + 1}
                   </span>
                   {wasSeenByMe && !isRevealed && !wasTampered && (

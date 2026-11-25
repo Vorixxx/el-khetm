@@ -1,5 +1,5 @@
 // ========================
-// EL-KHETM — Root-Level Card Zoom & Action Modal (Positional + Anti-Spam Aware)
+// EL-KHETM — Card Zoom & One-Tap Action Modal (Simplified Rules)
 // ========================
 
 import React from 'react';
@@ -49,13 +49,11 @@ export const CardZoomModal: React.FC = () => {
   const getHandCardError = (): string | null => {
     if (!handCard || !publicState || !myPlayer || !privateState) return null;
     if (publicState.phase === 'PEEK_START') return 'احفظ ورقك الأول!';
-    if (isMyDraw) return 'اسحب كارت الأول من الشباك أو الكومة!';
+    if (isMyDraw) return 'اسحب كارت الأول من الكومة!';
     if (!isMyTurn) return 'مش دورك دلوقتي';
     if (actionsLeft <= 0) return 'خلصت حركاتك';
 
-    const err = getCardPlayError(cardType, myPlayer.file, medhatActive, {
-      handCount: privateState.hand.length,
-    });
+    const err = getCardPlayError(cardType, myPlayer.file, medhatActive);
     if (err) return err;
 
     const myIdx = publicState.players.findIndex(p => p.id === myId);
@@ -95,20 +93,13 @@ export const CardZoomModal: React.FC = () => {
       return 'كل الخانات فاضية';
     }
     if (cardType === 'uncle_gamal' && publicState.discardPileCount === 0) return 'الأرشيف فاضي';
-    if (cardType === 'dossier_sort' && publicState.deckCount === 0) return 'كومة السحب فاضية';
     return null;
   };
 
-  const canPlaceInSlot = Boolean(
-    handCard &&
-      isMyTurn &&
-      actionsLeft > 0 &&
-      !(cardType === 'manager_sign' && medhatActive),
-  );
   const playError = handCard ? getHandCardError() : null;
 
   const handlePlace = () => {
-    if (!handCard || !canPlaceInSlot) return;
+    if (!handCard || playError) return;
     closeModal();
     setInteractionMode({ type: 'place_in_slot', handCard });
   };
@@ -116,10 +107,6 @@ export const CardZoomModal: React.FC = () => {
   const handlePlay = () => {
     if (!handCard || playError) return;
     closeModal();
-    if (def.burnCost > 0) {
-      setInteractionMode({ type: 'burn_card', card: handCard });
-      return;
-    }
     if (cardType === 'desk_swap' || cardType === 'wasta') {
       setInteractionMode({ type: 'pick_own_slot', card: handCard, purpose: cardType });
       return;
@@ -158,7 +145,7 @@ export const CardZoomModal: React.FC = () => {
             <X size={18} />
           </button>
 
-          <CardComponent cardType={cardType} size="lg" className="!w-[clamp(128px,36vw,176px)]" />
+          <CardComponent cardType={cardType} size="lg" className="!w-[clamp(140px,38vw,184px)]" />
 
           <div className="bg-manila rounded-xl border-2 border-ink shadow-retro p-3.5 w-full">
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -171,12 +158,10 @@ export const CardZoomModal: React.FC = () => {
             <div className="flex flex-wrap gap-1">
               <span className="inline-block text-[10.5px] font-cairo font-bold px-2 py-0.5 rounded-full border border-ink/20 bg-white/80">
                 {def.category === 'document'
-                  ? `📄 مستند فوز (+${def.filePoints} ن، +2 بالترتيب)`
-                  : def.category === 'trap'
-                  ? `⚠️ عقوبة (${def.filePoints} نقط لو في ملفك)`
+                  ? '📄 مستند رسمي للملف'
                   : def.category === 'prank'
                   ? '💣 مقلب'
-                  : '🛡️ ذكاء وأداة'}
+                  : '🛡️ ذكاء وحماية'}
               </span>
               {def.positionalTarget === 'next' && (
                 <span className="text-[10.5px] font-cairo font-bold px-2 py-0.5 rounded-full bg-prank-red/10 text-prank-red border border-prank-red/30">
@@ -198,42 +183,24 @@ export const CardZoomModal: React.FC = () => {
 
           {handCard && (
             <div className="w-full flex flex-col gap-2">
-              {isDoc ? (
-                playError ? (
-                  <div className="w-full text-center bg-manila text-prank-red px-3 py-2 rounded-xl border-2 border-prank-red text-xs font-cairo font-bold">
-                    {playError}
-                  </div>
-                ) : (
-                  <button
-                    onClick={handlePlace}
-                    className="w-full py-2.5 bg-doc-green text-white text-sm sm:text-base font-cairo font-bold rounded-xl border-2 border-ink shadow-retro active:shadow-none"
-                  >
-                    🗂️ نزّل في خانة من ملفك
-                  </button>
-                )
+              {playError ? (
+                <div className="w-full text-center bg-manila text-prank-red px-3 py-2 rounded-xl border-2 border-prank-red text-xs font-cairo font-bold">
+                  {playError}
+                </div>
+              ) : isDoc ? (
+                <button
+                  onClick={handlePlace}
+                  className="w-full py-3 bg-doc-green text-white text-sm sm:text-base font-cairo font-black rounded-xl border-2 border-ink shadow-retro active:shadow-none"
+                >
+                  🗂️ نزّل في خانة من ملفك
+                </button>
               ) : (
-                <>
-                  {playError ? (
-                    <div className="w-full text-center bg-manila text-prank-red px-3 py-2 rounded-xl border-2 border-prank-red text-xs font-cairo font-bold">
-                      {playError}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={handlePlay}
-                      className="w-full py-2.5 bg-defense-blue text-white text-sm sm:text-base font-cairo font-bold rounded-xl border-2 border-ink shadow-retro active:shadow-none"
-                    >
-                      🎴 العب الكارت {def.burnCost > 0 ? '(يتطلب حرق كارت)' : ''}
-                    </button>
-                  )}
-                  {canPlaceInSlot && (
-                    <button
-                      onClick={handlePlace}
-                      className="w-full py-2 bg-manila text-ink text-xs font-cairo font-bold rounded-xl border-2 border-ink/50 hover:bg-white"
-                    >
-                      🔄 أو بدّله جوه خانة من ملفك
-                    </button>
-                  )}
-                </>
+                <button
+                  onClick={handlePlay}
+                  className="w-full py-3 bg-defense-blue text-white text-sm sm:text-base font-cairo font-black rounded-xl border-2 border-ink shadow-retro active:shadow-none"
+                >
+                  ⚡ العب الكارت دلوقتي
+                </button>
               )}
             </div>
           )}

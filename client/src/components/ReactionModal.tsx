@@ -13,7 +13,7 @@ import { Card as CardComponent } from './Card';
 export const ReactionModal: React.FC = () => {
   const { socket } = useSocket();
   const { publicState, privateState, myPlayerId, activeModal, closeModal, react: reactAction } = useGameStore();
-  const [timeLeft, setTimeLeft] = useState(5);
+  const [timeLeft, setTimeLeft] = useState(7);
 
   const isOpen = activeModal === 'reaction';
   const reaction = publicState?.pendingReaction ?? null;
@@ -75,7 +75,7 @@ export const ReactionModal: React.FC = () => {
                       cx="18" cy="18" r="16" fill="none"
                       stroke={timeLeft < 2 ? '#B91C1C' : '#1D4ED8'}
                       strokeWidth="3"
-                      strokeDasharray={`${(timeLeft / 5) * 100.5} 100.5`}
+                      strokeDasharray={`${(timeLeft / 7) * 100.5} 100.5`}
                       strokeLinecap="round"
                     />
                   </svg>

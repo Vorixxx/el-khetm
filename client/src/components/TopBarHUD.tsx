@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HelpCircle, Volume2, VolumeX, ScrollText, LogOut, X, BarChart3 } from 'lucide-react';
+import { HelpCircle, Volume2, VolumeX, ScrollText, LogOut, X } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import { roundToClockTime, roundToClockProgress, CARD_DEFINITIONS } from '@el-khetm/shared';
@@ -52,17 +52,8 @@ export const TopBarHUD: React.FC = () => {
           </div>
         </div>
 
-        {/* Left: Controls (Card Counter, Event History, Mute, Rules, Exit) */}
+        {/* Left: Controls (Event History, Mute, Rules, Exit) */}
         <div className="flex items-center gap-0.5 bg-manila/95 px-1.5 py-1 rounded-xl border-2 border-ink shadow-retro-sm">
-          <button
-            onClick={() => openModal('card_counter')}
-            className="flex items-center gap-1 px-1.5 py-1 rounded-lg hover:bg-ink/10 active:bg-ink/15 transition-colors text-[10.5px] font-cairo font-bold text-defense-blue"
-            title="عدّاد الأرشيف لتحليل الكروت"
-          >
-            <BarChart3 size={15} />
-            <span>العدّاد</span>
-          </button>
-
           <button
             onClick={() => setShowHistory(true)}
             className="flex items-center gap-1 px-1.5 py-1 rounded-lg hover:bg-ink/10 active:bg-ink/15 transition-colors text-[10.5px] font-cairo font-bold text-ink"

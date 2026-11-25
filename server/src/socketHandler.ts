@@ -6,7 +6,6 @@ import type { Server as SocketServer, Socket } from 'socket.io';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
-  DrawSource,
   PlayCardPayload,
 } from '@el-khetm/shared';
 import { GAME_CONSTANTS, MEME_STICKERS } from '@el-khetm/shared';
@@ -191,7 +190,7 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       }
     });
 
-    // --- Strategic Skrew + El-Khetm Actions ---
+    // --- Simplified El-Khetm Actions ---
 
     socket.on('action:start_peek', (data: { slotIndex: number }) => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
@@ -200,11 +199,11 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room?.handleStartPeek(playerId, data.slotIndex);
     });
 
-    socket.on('action:draw_card', (data: { source: DrawSource; marketIndex?: number }) => {
+    socket.on('action:draw_card', () => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode || !playerId) return;
       const room = roomManager.getRoom(roomCode);
-      room?.handleDrawCard(playerId, data.source, data.marketIndex);
+      room?.handleDrawCard(playerId);
     });
 
     socket.on('action:place_in_slot', (data: { cardInstanceId: string; slotIndex: number }) => {
@@ -214,32 +213,11 @@ export function setupSocketHandler(io: SocketServer, roomManager: RoomManager): 
       room?.handlePlaceInSlot(playerId, data.cardInstanceId, data.slotIndex);
     });
 
-    socket.on('action:match_archive', (data: { slotIndex: number }) => {
-      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
-      if (!roomCode || !playerId) return;
-      const room = roomManager.getRoom(roomCode);
-      room?.handleMatchArchive(playerId, data.slotIndex);
-    });
-
-    socket.on('action:close_window', () => {
-      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
-      if (!roomCode || !playerId) return;
-      const room = roomManager.getRoom(roomCode);
-      room?.handleCloseWindow(playerId);
-    });
-
     socket.on('action:play_card', (data: PlayCardPayload) => {
       const { roomCode, playerId } = socket.data || {} as Record<string, string>;
       if (!roomCode || !playerId) return;
       const room = roomManager.getRoom(roomCode);
       room?.handlePlayCard(playerId, data);
-    });
-
-    socket.on('action:sort_deck', (data: { orderedInstanceIds: string[] }) => {
-      const { roomCode, playerId } = socket.data || {} as Record<string, string>;
-      if (!roomCode || !playerId) return;
-      const room = roomManager.getRoom(roomCode);
-      room?.handleSortDeck(playerId, data.orderedInstanceIds);
     });
 
     socket.on('action:target_discard', (data: { cardInstanceIds: string[] }) => {

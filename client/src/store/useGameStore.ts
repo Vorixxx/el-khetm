@@ -1,5 +1,5 @@
 // ========================
-// EL-KHETM — Zustand Game Store
+// EL-KHETM — Zustand Game Store (Simplified El-Khetm State)
 // ========================
 
 import { create } from 'zustand';
@@ -11,7 +11,6 @@ import type {
   AvatarId,
   Card,
   CardType,
-  DrawSource,
   PlayCardPayload,
 } from '@el-khetm/shared';
 import type { TypedSocket } from '../hooks/useSocket';
@@ -32,10 +31,8 @@ export type ModalType =
   | 'target'
   | 'reaction'
   | 'archive'
-  | 'sort'
   | 'target_discard'
   | 'discard'
-  | 'card_counter'
   | 'card_zoom'
   | 'stickers'
   | 'rules'
@@ -48,14 +45,11 @@ export interface ModalData {
   handCard?: Card;
   targetPlayerId?: string;
   ownSlotIndex?: number;
-  burnCardInstanceId?: string;
 }
 
 export type BoardInteractionMode =
   | { type: 'place_in_slot'; handCard: Card }
-  | { type: 'match_archive' }
-  | { type: 'burn_card'; card: Card }
-  | { type: 'pick_own_slot'; card: Card; purpose: 'desk_swap' | 'wasta'; burnCardInstanceId?: string }
+  | { type: 'pick_own_slot'; card: Card; purpose: 'desk_swap' | 'wasta' }
   | null;
 
 export interface CardHoverPreview {
@@ -135,12 +129,9 @@ interface GameStore {
   startGame: (socket: TypedSocket) => void;
 
   startPeek: (socket: TypedSocket, slotIndex: number) => void;
-  drawCard: (socket: TypedSocket, source: DrawSource, marketIndex?: number) => void;
+  drawCard: (socket: TypedSocket) => void;
   placeInSlot: (socket: TypedSocket, cardInstanceId: string, slotIndex: number) => void;
-  matchArchive: (socket: TypedSocket, slotIndex: number) => void;
-  closeWindow: (socket: TypedSocket) => void;
   playCard: (socket: TypedSocket, payload: PlayCardPayload) => void;
-  sortDeck: (socket: TypedSocket, orderedInstanceIds: string[]) => void;
   targetDiscard: (socket: TypedSocket, cardInstanceIds: string[]) => void;
   endTurn: (socket: TypedSocket) => void;
   react: (socket: TypedSocket, block: boolean) => void;
@@ -271,28 +262,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
   startPeek: (socket, slotIndex) => {
     socket.emit('action:start_peek', { slotIndex });
   },
-  drawCard: (socket, source, marketIndex) => {
+  drawCard: (socket) => {
     set({ interactionMode: null, hoveredPreview: null });
-    socket.emit('action:draw_card', { source, marketIndex });
+    socket.emit('action:draw_card');
   },
   placeInSlot: (socket, cardInstanceId, slotIndex) => {
     set({ interactionMode: null, hoveredPreview: null });
     socket.emit('action:place_in_slot', { cardInstanceId, slotIndex });
   },
-  matchArchive: (socket, slotIndex) => {
-    set({ interactionMode: null, hoveredPreview: null });
-    socket.emit('action:match_archive', { slotIndex });
-  },
-  closeWindow: (socket) => {
-    set({ interactionMode: null, hoveredPreview: null });
-    socket.emit('action:close_window');
-  },
   playCard: (socket, payload) => {
     set({ interactionMode: null, hoveredPreview: null });
     socket.emit('action:play_card', payload);
-  },
-  sortDeck: (socket, orderedInstanceIds) => {
-    socket.emit('action:sort_deck', { orderedInstanceIds });
   },
   targetDiscard: (socket, cardInstanceIds) => {
     socket.emit('action:target_discard', { cardInstanceIds });
@@ -347,19 +327,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       let nextModalData = get().modalData;
       let nextInteraction = get().interactionMode;
 
-      // Clear turn-bound interaction modes when it's no longer our ACTION_PHASE
       if (data.phase !== 'ACTION_PHASE' || data.currentTurnPlayerId !== myId) {
         nextInteraction = null;
       }
 
-      // Close stale phase modals
       if (nextModal === 'reaction' && data.phase !== 'PENDING_REACTION') {
         nextModal = null; nextModalData = {};
       }
       if (nextModal === 'archive' && data.phase !== 'PENDING_ARCHIVE') {
-        nextModal = null; nextModalData = {};
-      }
-      if (nextModal === 'sort' && data.phase !== 'PENDING_SORT') {
         nextModal = null; nextModalData = {};
       }
       if (nextModal === 'target_discard' && data.phase !== 'PENDING_TARGET_DISCARD') {
@@ -372,7 +347,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         nextModal = null; nextModalData = {};
       }
 
-      // Open phase modals automatically
       if (data.phase === 'GAME_OVER' && prev?.phase !== 'GAME_OVER') {
         nextModal = 'gameover';
         saveActiveRoomCode(null);
@@ -380,8 +354,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         nextModal = 'reaction';
       } else if (data.phase === 'PENDING_ARCHIVE' && data.pendingArchive?.playerId === myId) {
         nextModal = 'archive';
-      } else if (data.phase === 'PENDING_SORT' && data.pendingSort?.playerId === myId) {
-        nextModal = 'sort';
       } else if (data.phase === 'PENDING_TARGET_DISCARD' && data.pendingTargetDiscard?.targetId === myId) {
         nextModal = 'target_discard';
       } else if (data.phase === 'DISCARD_PHASE' && data.currentTurnPlayerId === myId) {
@@ -409,8 +381,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
           set({ activeModal: 'reaction' });
         } else if (pub.phase === 'PENDING_ARCHIVE' && pub.pendingArchive?.playerId === data.playerId) {
           set({ activeModal: 'archive' });
-        } else if (pub.phase === 'PENDING_SORT' && pub.pendingSort?.playerId === data.playerId) {
-          set({ activeModal: 'sort' });
         } else if (pub.phase === 'PENDING_TARGET_DISCARD' && pub.pendingTargetDiscard?.targetId === data.playerId) {
           set({ activeModal: 'target_discard' });
         } else if (pub.phase === 'DISCARD_PHASE' && pub.currentTurnPlayerId === data.playerId && data.hand.length > 7) {

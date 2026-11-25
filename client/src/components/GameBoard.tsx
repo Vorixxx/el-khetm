@@ -2,9 +2,9 @@
 // EL-KHETM — Game Board (Circular Table + Spotlight Pop-Out Card + Multi-Peek Strip)
 // ========================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, Sparkles } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { TopBarHUD } from './TopBarHUD';
 import { OpponentSeat } from './OpponentSeat';
@@ -12,8 +12,9 @@ import { TableCenter } from './TableCenter';
 import { PlayerFile } from './PlayerFile';
 import { PlayerHand } from './PlayerHand';
 import { FloatingCardPreview } from './FloatingCardPreview';
+import { CardFlightLayer } from './CardFlightLayer';
 import { Card as CardComponent } from './Card';
-import { BACKGROUNDS, CARD_BACK } from '../config/assets';
+import { BACKGROUNDS } from '../config/assets';
 import { CARD_DEFINITIONS } from '@el-khetm/shared';
 import type { PublicPlayer } from '@el-khetm/shared';
 
@@ -62,6 +63,7 @@ function assignSeats(players: PublicPlayer[], myId: string): SeatAssignment {
 export const GameBoard: React.FC = () => {
   const { publicState, privateState, myPlayerId } = useGameStore();
   const [shieldFlash, setShieldFlash] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
 
   const lastEvent = publicState?.lastEvent ?? null;
   useEffect(() => {
@@ -72,11 +74,6 @@ export const GameBoard: React.FC = () => {
     }
   }, [lastEvent?.id, lastEvent?.blocked]);
 
-  useEffect(() => {
-    const backImg = new Image();
-    backImg.src = CARD_BACK;
-  }, []);
-
   if (!publicState) return null;
 
   const myId = privateState?.playerId || myPlayerId || '';
@@ -85,6 +82,7 @@ export const GameBoard: React.FC = () => {
 
   return (
     <div
+      ref={boardRef}
       className="h-full w-full flex flex-col justify-between overflow-hidden relative"
       style={{
         backgroundImage: `radial-gradient(ellipse at center, rgba(244,239,230,0.06) 35%, rgba(20,14,10,0.34) 100%), url('${BACKGROUNDS.table_mobile}')`,
@@ -97,7 +95,7 @@ export const GameBoard: React.FC = () => {
     >
       {/* Glowing Circular Table Arena Ring */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
-        <div className="w-[92%] max-w-[440px] aspect-square -translate-y-4 rounded-full border-[3px] border-wasta-gold/65 shadow-[0_0_42px_rgba(245,158,11,0.35),inset_0_0_38px_rgba(30,41,59,0.18)] bg-ink/[0.04] relative">
+        <div className="w-[88%] max-w-[540px] aspect-square -translate-y-4 rounded-full border-[3px] border-wasta-gold/65 shadow-[0_0_32px_rgba(245,158,11,0.3),inset_0_0_28px_rgba(30,41,59,0.16)] bg-ink/[0.04] relative">
           <div className="absolute inset-2.5 rounded-full border border-dashed border-ink/20" />
           <span className="compact-hide-short absolute -top-2.5 left-1/2 -translate-x-1/2 bg-manila/95 text-[9px] font-cairo font-extrabold text-ink px-2 py-0 rounded-full border border-wasta-gold/70 shadow-sm">
             ↻ اتجاه اللعب
@@ -134,21 +132,6 @@ export const GameBoard: React.FC = () => {
             startPeeksLeft={startPeeksLeft}
             peekStartExpiresAt={publicState.peekStartExpiresAt}
           />
-        )}
-
-        {publicState.windowClosedByPlayerId && publicState.phase !== 'GAME_OVER' && (
-          <motion.div
-            key="window-closed-banner"
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            className="mx-3 mb-0.5 z-20 flex items-center justify-center gap-1.5 bg-prank-red text-white px-3 py-1 rounded-full border-2 border-ink shadow-retro-sm text-[11px] font-cairo font-black animate-pulse"
-          >
-            <Sparkles size={13} />
-            <span>
-              🚨 {publicState.windowClosedPlayerName} قفل الشباك! جولة أخيرة قبل كشف الملفات!
-            </span>
-          </motion.div>
         )}
       </AnimatePresence>
 
@@ -208,6 +191,9 @@ export const GameBoard: React.FC = () => {
       <div className="flex-shrink-0 z-20 pb-1.5 px-1.5">
         <PlayerHand />
       </div>
+
+      {/* Animated Card Flights Across Table */}
+      <CardFlightLayer boardRef={boardRef} />
 
       {/* Center Pop-Out Spotlight Card */}
       <SpotlightCardOverlay />
@@ -324,7 +310,7 @@ const PeekSecretBanner: React.FC = () => {
     return () => clearInterval(id);
   }, [activePeek, activeMultiPeek]);
 
-  if (rem <= 0 || !publicState) return null;
+  if (rem <= 0 || !publicState || publicState.phase === 'PEEK_START') return null;
 
   if (activeMultiPeek && activeMultiPeek.length > 0) {
     return (
@@ -334,22 +320,32 @@ const PeekSecretBanner: React.FC = () => {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 12 }}
-          className="absolute bottom-[clamp(245px,36dvh,320px)] inset-x-0 z-40 flex justify-center pointer-events-none px-3"
+          className="absolute bottom-[clamp(270px,40dvh,360px)] inset-x-0 z-40 flex justify-center pointer-events-none px-3"
           dir="rtl"
         >
-          <div className="bg-ink/95 text-white px-3 py-2 rounded-2xl border-2 border-wasta-gold shadow-retro-lg flex flex-col gap-1 max-w-[360px]">
-            <div className="flex items-center justify-between text-[11px] font-cairo font-black text-wasta-gold">
+          <div className="bg-ink/95 text-white px-3 py-2 rounded-2xl border-2 border-wasta-gold shadow-retro-lg flex flex-col gap-1.5 max-w-[380px]">
+            <div className="flex items-center justify-between gap-2 text-[11px] font-cairo font-black text-wasta-gold">
               <span>👀 وريني كده اللي معاك (تفتيش سري)</span>
               <span className="bg-white/20 text-white px-1.5 rounded-full text-[10px]">{rem}ث</span>
             </div>
-            <div className="flex flex-wrap gap-1.5 text-[10px] font-cairo font-bold">
+            <div className="grid grid-cols-2 gap-1.5">
               {activeMultiPeek.map(item => {
                 const owner = publicState.players.find(p => p.id === item.targetPlayerId);
                 return (
-                  <span key={`${item.targetPlayerId}-${item.slotIndex}`} className="bg-white/10 px-2 py-0.5 rounded-lg border border-white/20">
-                    {owner?.id === privateState?.playerId ? 'أنت' : owner?.name} (#{item.slotIndex + 1}):{' '}
-                    <strong className="text-wasta-gold">{CARD_DEFINITIONS[item.card.cardType].nameAr}</strong>
-                  </span>
+                  <div
+                    key={`${item.targetPlayerId}-${item.slotIndex}`}
+                    className="bg-white/10 px-2 py-1 rounded-xl border border-white/20 flex items-center gap-1.5"
+                  >
+                    <CardComponent cardType={item.card.cardType} size="xs" />
+                    <div className="min-w-0 flex-1 text-[10px] font-cairo leading-tight">
+                      <p className="text-white/80 font-bold truncate">
+                        {owner?.id === privateState?.playerId ? 'ملفك' : owner?.name} (خانة {item.slotIndex + 1})
+                      </p>
+                      <p className="text-wasta-gold font-black truncate">
+                        {CARD_DEFINITIONS[item.card.cardType].nameAr}
+                      </p>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -370,16 +366,18 @@ const PeekSecretBanner: React.FC = () => {
         initial={{ opacity: 0, y: 12, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 12 }}
-        className="absolute bottom-[clamp(245px,36dvh,320px)] inset-x-0 z-40 flex justify-center pointer-events-none px-4"
+        className="absolute bottom-[clamp(270px,40dvh,360px)] inset-x-0 z-40 flex justify-center pointer-events-none px-4"
         dir="rtl"
       >
-        <div className="bg-ink text-white px-3.5 py-1.5 rounded-full border-2 border-wasta-gold shadow-retro-lg flex items-center gap-2 text-xs font-cairo font-bold">
-          <span>👁️</span>
-          <span>
-            كشف سري ({owner?.id === privateState?.playerId ? 'ملفك' : owner?.name} - خانة #{activePeek.slotIndex + 1}):
-          </span>
-          <span className="text-wasta-gold font-black">{cardDef.nameAr}</span>
-          <span className="bg-white/20 px-1.5 rounded-full text-[10px]">{rem}ث</span>
+        <div className="bg-ink text-white px-3 py-2 rounded-2xl border-2 border-wasta-gold shadow-retro-lg flex items-center gap-2.5 text-xs font-cairo font-bold">
+          <CardComponent cardType={activePeek.card.cardType} size="xs" />
+          <div className="flex flex-col leading-tight">
+            <span className="text-[10.5px] text-white/80">
+              👁️ {owner?.id === privateState?.playerId ? 'ملفك' : owner?.name} — خانة {activePeek.slotIndex + 1}
+            </span>
+            <span className="text-sm text-wasta-gold font-black">{cardDef.nameAr}</span>
+          </div>
+          <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] mr-1">{rem}ث</span>
         </div>
       </motion.div>
     </AnimatePresence>

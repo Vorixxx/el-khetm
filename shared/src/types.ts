@@ -1,14 +1,12 @@
 // ========================
-// EL-KHETM (الختم) — Shared Types
-// ========================'
+// EL-KHETM (الختم) — Shared Types (Simplified Memory & 4-Document Race)
+// ========================
 
 // === Card Types ===
 
-export type CardCategory = 'document' | 'trap' | 'prank' | 'utility';
+export type CardCategory = 'document' | 'prank' | 'utility';
 
 export type DocumentCardType = 'id_copy' | 'stamp_duty' | 'manager_sign' | 'eagle_seal';
-
-export type TrapCardType = 'fake_paper' | 'violation_ticket';
 
 export type PrankCardType =
   | 'system_down'
@@ -24,11 +22,10 @@ export type UtilityCardType =
   | 'drawer_peek'
   | 'show_me_all'
   | 'desk_swap'
-  | 'dossier_sort'
   | 'recommendation'
   | 'uncle_gamal';
 
-export type CardType = DocumentCardType | TrapCardType | PrankCardType | UtilityCardType;
+export type CardType = DocumentCardType | PrankCardType | UtilityCardType;
 
 export type PositionalTarget = 'next' | 'prev' | 'all' | null;
 
@@ -36,16 +33,14 @@ export interface CardDefinition {
   cardType: CardType;
   category: CardCategory;
   nameAr: string;
+  /** Short 2-4 word crisp hint displayed clearly under large hand cards */
+  shortEffectAr: string;
   descriptionAr: string;
   color: string;
   quantity: number;
-  /** Points if remaining inside your 4-slot file at showdown */
-  filePoints: number;
-  /** Extra card burn cost required in hand to play this powerful card */
-  burnCost: number;
   /** Fair positional targeting: next player, prev player, or all table players */
   positionalTarget: PositionalTarget;
-  /** Whether this card triggers a 5s reaction window when targeting an opponent */
+  /** Whether this card triggers a 7s reaction window when targeting an opponent */
   triggersReaction: boolean;
   /** Whether player explicitly picks an opponent (respects Anti-Spam Round Immunity!) */
   targetsOpponent: boolean;
@@ -96,17 +91,29 @@ export interface SpotlightCardNotice {
   expiresAt: number;
 }
 
-export interface PlayerScoreBreakdown {
+export type CardMotionLocation =
+  | { zone: 'deck' }
+  | { zone: 'archive' }
+  | { zone: 'hand'; playerId: string }
+  | { zone: 'slot'; playerId: string; slotIndex: number };
+
+export interface CardMotionEvent {
+  id: string;
+  from: CardMotionLocation;
+  to: CardMotionLocation;
+  cardType?: CardType;
+  faceDown: boolean;
+  labelAr?: string;
+  durationMs: number;
+  createdAt: number;
+}
+
+export interface PlayerFileSummary {
   playerId: string;
   uniqueDocsCount: number;
-  docsPoints: number;
-  orderBonus: number;
-  completeFileBonus: number;
-  trapPenalty: number;
-  matchBonus: number;
-  windowCloseDelta: number;
-  totalScore: number;
-  hasPerfectFile: boolean;
+  filledSlotsCount: number;
+  docsCollected: DocumentCardType[];
+  hasCompleteFile: boolean;
 }
 
 export interface PublicPlayer {
@@ -121,10 +128,9 @@ export interface PublicPlayer {
   /** Closed 4-slot dossier around the table */
   dossierSlots: PublicDossierSlot[];
   filledSlotCount: number;
-  matchScore: number;
   handCount: number;
   file: DocumentCardType[];
-  scoreBreakdown: PlayerScoreBreakdown | null;
+  fileSummary: PlayerFileSummary | null;
 }
 
 export interface LobbyPlayer {
@@ -145,15 +151,12 @@ export type GamePhase =
   | 'ACTION_PHASE'
   | 'PENDING_REACTION'
   | 'PENDING_ARCHIVE'
-  | 'PENDING_SORT'
   | 'PENDING_TARGET_DISCARD'
   | 'DISCARD_PHASE'
   | 'TURN_END'
   | 'GAME_OVER';
 
-export type WinReason = 'WINDOW_CLOSED' | 'TWO_PM_TIMEOUT' | 'PERFECT_SEAL' | null;
-
-export type DrawSource = 'deck' | 'market';
+export type WinReason = 'PERFECT_SEAL' | 'TWO_PM_TIMEOUT' | null;
 
 export interface GlobalEffects {
   medhatVacationUntilPlayerId: string | null;
@@ -171,11 +174,6 @@ export interface PendingReaction {
 }
 
 export interface PendingArchive {
-  playerId: string;
-  expiresAt: number;
-}
-
-export interface PendingDeckSort {
   playerId: string;
   expiresAt: number;
 }
@@ -205,8 +203,6 @@ export interface GameEventNotice {
   targetSlotIndex?: number;
   blocked?: boolean;
   isFrozenSkip?: boolean;
-  isMatchSuccess?: boolean;
-  isWindowClose?: boolean;
   headlineAr: string;
   explanationAr: string;
   bubbleActorAr?: string;
@@ -221,25 +217,19 @@ export interface PublicGameState {
   roundNumber: number;
   currentTurnPlayerId: string;
   actionsRemaining: number;
-  matchedThisTurn: boolean;
   turnExpiresAt: number | null;
   peekStartExpiresAt: number | null;
   players: PublicPlayer[];
   deckCount: number;
-  openMarket: (Card | null)[];
   discardPileRecent: Card[];
   discardPileTop: Card | null;
   discardPileCount: number;
-  archiveTypeCounts: Partial<Record<CardType, number>>;
   globalEffects: GlobalEffects;
   pendingReaction: PendingReaction | null;
   pendingArchive: PendingArchive | null;
-  pendingSort: PendingDeckSort | null;
   pendingTargetDiscard: PendingTargetDiscard | null;
-  windowClosedByPlayerId: string | null;
-  windowClosedPlayerName: string | null;
-  finalTurnQueueIds: string[];
   recentSlotHighlights: SlotHighlight[];
+  recentCardMotions: CardMotionEvent[];
   spotlightCard: SpotlightCardNotice | null;
   actionLog: string[];
   lastEvent: GameEventNotice | null;
@@ -252,13 +242,12 @@ export interface PrivateGameState {
   playerId: string;
   hand: Card[];
   archiveCards: Card[] | null;
-  topDeckCards: Card[] | null;
   startPeeksRemaining: number;
   seenSlotsByPlayer: Record<string, number[]>;
   /** Slots this player previously memorized that were tampered/swapped behind their back */
   tamperedSlotsByPlayer: Record<string, number[]>;
   activePeek: ActivePeekInfo | null;
-  /** Multiple revealed cards for "وريني كده اللي معاك" */
+  /** Multiple revealed cards for "وريني كده اللي معاك" or start peeks */
   activeMultiPeek: ActivePeekInfo[] | null;
 }
 
@@ -278,7 +267,6 @@ export interface PlayCardPayload {
   targetPlayerId?: string;
   targetSlotIndex?: number;
   ownSlotIndex?: number;
-  burnCardInstanceId?: string;
   /** playerId -> slotIndex map for "show_me_all" (وريني كده اللي معاك) */
   multiTargets?: Record<string, number>;
 }
@@ -294,12 +282,9 @@ export interface ClientToServerEvents {
   'room:leave': () => void;
 
   'action:start_peek': (data: { slotIndex: number }) => void;
-  'action:draw_card': (data: { source: DrawSource; marketIndex?: number }) => void;
+  'action:draw_card': () => void;
   'action:place_in_slot': (data: { cardInstanceId: string; slotIndex: number }) => void;
-  'action:match_archive': (data: { slotIndex: number }) => void;
-  'action:close_window': () => void;
   'action:play_card': (data: PlayCardPayload) => void;
-  'action:sort_deck': (data: { orderedInstanceIds: string[] }) => void;
   'action:target_discard': (data: { cardInstanceIds: string[] }) => void;
   'action:end_turn': () => void;
   'action:react': (data: { block: boolean }) => void;
@@ -389,33 +374,30 @@ export const GAME_CONSTANTS = {
   MAX_PLAYERS: 6,
   DOSSIER_SLOTS: 4,
   START_PEEKS_COUNT: 2,
-  OPEN_MARKET_SIZE: 3,
   STARTING_HAND_SIZE: 3,
   MAX_HAND_SIZE: 7,
   ACTIONS_PER_TURN: 2,
   MAX_ROUNDS: 20,
-  MIN_ROUND_TO_CLOSE_WINDOW: 2,
-  PEEK_START_TIMER_MS: 11_000,
-  ACTIVE_PEEK_DURATION_MS: 4_200,
-  MULTI_PEEK_DURATION_MS: 5_500,
-  SLOT_HIGHLIGHT_DURATION_MS: 2_800,
-  SPOTLIGHT_DURATION_MS: 2_300,
-  DRAW_TIMER_MS: 22_000,
-  TURN_TIMER_MS: 34_000,
-  REACTION_TIMER_MS: 5_000,
-  ARCHIVE_TIMER_MS: 15_000,
-  SORT_TIMER_MS: 12_000,
-  TARGET_DISCARD_TIMER_MS: 12_000,
-  DISCARD_TIMER_MS: 15_000,
-  // Readable Bot pacing so players can comfortably follow every move on the table
-  BOT_MIN_DELAY_MS: 2200,
-  BOT_MAX_DELAY_MS: 2900,
-  BOT_TURN_START_DELAY_MS: 1500,
-  BOT_DRAW_DELAY_MS: 1500,
-  BOT_TURN_END_PAUSE_MS: 1400,
-  FROZEN_SKIP_DELAY_MS: 2200,
-  BOT_REACTION_MIN_MS: 1800,
-  BOT_REACTION_MAX_MS: 2700,
+  PEEK_START_TIMER_MS: 16_000,
+  ACTIVE_PEEK_DURATION_MS: 6_000,
+  MULTI_PEEK_DURATION_MS: 7_500,
+  SLOT_HIGHLIGHT_DURATION_MS: 4_000,
+  CARD_MOTION_TTL_MS: 3_500,
+  SPOTLIGHT_DURATION_MS: 3_200,
+  DRAW_TIMER_MS: 32_000,
+  TURN_TIMER_MS: 45_000,
+  REACTION_TIMER_MS: 7_000,
+  ARCHIVE_TIMER_MS: 18_000,
+  TARGET_DISCARD_TIMER_MS: 15_000,
+  DISCARD_TIMER_MS: 18_000,
+  BOT_MIN_DELAY_MS: 2800,
+  BOT_MAX_DELAY_MS: 3800,
+  BOT_TURN_START_DELAY_MS: 2000,
+  BOT_DRAW_DELAY_MS: 2200,
+  BOT_TURN_END_PAUSE_MS: 2000,
+  FROZEN_SKIP_DELAY_MS: 2600,
+  BOT_REACTION_MIN_MS: 2000,
+  BOT_REACTION_MAX_MS: 3000,
   ROOM_CLEANUP_TIMEOUT_MS: 5 * 60 * 1000,
   ROOM_CODE_LENGTH: 4,
 } as const;

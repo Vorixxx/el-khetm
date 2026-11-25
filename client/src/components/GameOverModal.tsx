@@ -1,14 +1,14 @@
 // ========================
-// EL-KHETM — Game Over Modal (Showdown Reveal & Score Breakdown)
+// EL-KHETM — Game Over Modal (4-Document Showdown, Zero Points)
 // ========================
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Clock, RotateCcw, Home, Sparkles } from 'lucide-react';
+import { Clock, RotateCcw, Home, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import { getAvatarImage, getAvatarFallback, getCardImage } from '../config/assets';
-import { roundToClockTime, CARD_DEFINITIONS } from '@el-khetm/shared';
+import { roundToClockTime, CARD_DEFINITIONS, CORE_DOCUMENTS } from '@el-khetm/shared';
 import type { AvatarId } from '@el-khetm/shared';
 
 export const GameOverModal: React.FC = () => {
@@ -30,14 +30,15 @@ export const GameOverModal: React.FC = () => {
 
   const winners = publicState ? publicState.players.filter(p => publicState.winnerIds?.includes(p.id)) : [];
   const isPerfect = publicState?.winReason === 'PERFECT_SEAL';
-  const isWindowClosed = publicState?.winReason === 'WINDOW_CLOSED';
   const winnerNames = winners.map(w => w.name).join(' و ');
   const endClock = publicState ? roundToClockTime(publicState.roundNumber || 1) : '';
 
   const sortedPlayers = publicState
-    ? [...publicState.players].sort(
-        (a, b) => (b.scoreBreakdown?.totalScore ?? 0) - (a.scoreBreakdown?.totalScore ?? 0),
-      )
+    ? [...publicState.players].sort((a, b) => {
+        const docsDiff = (b.fileSummary?.uniqueDocsCount ?? 0) - (a.fileSummary?.uniqueDocsCount ?? 0);
+        if (docsDiff !== 0) return docsDiff;
+        return (b.fileSummary?.filledSlotsCount ?? 0) - (a.fileSummary?.filledSlotsCount ?? 0);
+      })
     : [];
 
   return (
@@ -62,15 +63,13 @@ export const GameOverModal: React.FC = () => {
             <div className="flex flex-col items-center text-center mb-3">
               <div
                 className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
-                  isPerfect || isWindowClosed
+                  isPerfect
                     ? 'bg-wasta-gold/25 border-2 border-wasta-gold'
                     : 'bg-ink/10 border-2 border-ink/30'
                 }`}
               >
                 {isPerfect ? (
                   <Sparkles className="text-wasta-gold" size={28} />
-                ) : isWindowClosed ? (
-                  <Trophy className="text-wasta-gold" size={28} />
                 ) : (
                   <Clock className="text-ink/75" size={28} />
                 )}
@@ -78,9 +77,7 @@ export const GameOverModal: React.FC = () => {
 
               <h2 className="font-cairo font-black text-xl text-ink">
                 {isPerfect
-                  ? '🦅 ختم مثالي بالترتيب!'
-                  : isWindowClosed
-                  ? `🚨 كشف الملفات (${publicState.windowClosedPlayerName} قفل الشباك!)`
+                  ? '🦅 الختم الكامل — ملف مكتمل!'
                   : '⏰ الساعة جت 2 الضهر — كشف الملفات!'}
               </h2>
               <p className="font-cairo font-bold text-xs text-ink/75 mt-1">
@@ -88,11 +85,14 @@ export const GameOverModal: React.FC = () => {
               </p>
             </div>
 
-            {/* Detailed Showdown Table */}
-            <div className="space-y-2 mb-4">
+            {/* Players Revealed 4-Slot Showdown */}
+            <div className="space-y-2.5 mb-4">
               {sortedPlayers.map((p, rank) => {
-                const sb = p.scoreBreakdown;
+                const fs = p.fileSummary;
                 const isWinner = publicState.winnerIds?.includes(p.id);
+                const docsCollected = fs?.docsCollected ?? [];
+                const docCount = fs?.uniqueDocsCount ?? 0;
+
                 return (
                   <div
                     key={p.id}
@@ -117,16 +117,18 @@ export const GameOverModal: React.FC = () => {
                       </div>
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-xs font-cairo font-black border ${
-                          isWinner
+                          docCount === 4
                             ? 'bg-doc-green text-white border-ink'
+                            : isWinner
+                            ? 'bg-wasta-gold text-ink border-ink'
                             : 'bg-manila text-ink border-ink/30'
                         }`}
                       >
-                        {sb?.totalScore ?? 0} نقطة
+                        {docCount === 4 ? '🦅 4/4 مكتمل!' : `${docCount} / 4 مستندات`}
                       </span>
                     </div>
 
-                    {/* Revealed 4 Cards Row */}
+                    {/* Revealed 4 Slots */}
                     <div className="flex items-center gap-1.5 mb-2">
                       {p.dossierSlots.map((slot, sIdx) => (
                         <div
@@ -138,14 +140,14 @@ export const GameOverModal: React.FC = () => {
                               <img
                                 src={getCardImage(slot.revealedCard.cardType)}
                                 alt={CARD_DEFINITIONS[slot.revealedCard.cardType].nameAr}
-                                className="w-10 h-14 rounded border border-ink object-cover"
+                                className="w-11 h-15 rounded border border-ink object-cover"
                               />
                               <span className="text-[8.5px] font-cairo font-bold text-ink truncate w-full text-center mt-0.5">
                                 {CARD_DEFINITIONS[slot.revealedCard.cardType].nameAr}
                               </span>
                             </>
                           ) : (
-                            <div className="w-10 h-14 rounded border border-dashed border-ink/30 flex items-center justify-center text-[9px] text-ink/45">
+                            <div className="w-11 h-15 rounded border border-dashed border-ink/30 flex items-center justify-center text-[9px] text-ink/45">
                               فاضي
                             </div>
                           )}
@@ -153,45 +155,25 @@ export const GameOverModal: React.FC = () => {
                       ))}
                     </div>
 
-                    {/* Score Formula Breakdown Badges */}
-                    {sb && (
-                      <div className="flex flex-wrap gap-1 text-[9.5px] font-cairo font-bold">
-                        <span className="bg-doc-green/10 text-doc-green px-1.5 py-0.5 rounded">
-                          مستندات: +{sb.docsPoints}
-                        </span>
-                        {sb.orderBonus > 0 && (
-                          <span className="bg-wasta-gold/20 text-ink px-1.5 py-0.5 rounded">
-                            ترتيب: +{sb.orderBonus}
-                          </span>
-                        )}
-                        {sb.completeFileBonus > 0 && (
-                          <span className="bg-doc-green text-white px-1.5 py-0.5 rounded">
-                            ملف كامل: +{sb.completeFileBonus}
-                          </span>
-                        )}
-                        {sb.matchBonus !== 0 && (
-                          <span className="bg-defense-blue/15 text-defense-blue px-1.5 py-0.5 rounded">
-                            جرد: {sb.matchBonus > 0 ? `+${sb.matchBonus}` : sb.matchBonus}
-                          </span>
-                        )}
-                        {sb.trapPenalty !== 0 && (
-                          <span className="bg-prank-red/15 text-prank-red px-1.5 py-0.5 rounded">
-                            عوائق/مقالب: {sb.trapPenalty > 0 ? `+${sb.trapPenalty}` : sb.trapPenalty}
-                          </span>
-                        )}
-                        {sb.windowCloseDelta !== 0 && (
+                    {/* Checklist of the 4 Official Documents */}
+                    <div className="flex flex-wrap gap-1 text-[9.5px] font-cairo font-bold">
+                      {CORE_DOCUMENTS.map(doc => {
+                        const has = docsCollected.includes(doc);
+                        return (
                           <span
-                            className={`px-1.5 py-0.5 rounded ${
-                              sb.windowCloseDelta > 0
-                                ? 'bg-wasta-gold text-ink'
-                                : 'bg-prank-red text-white'
+                            key={doc}
+                            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded ${
+                              has
+                                ? 'bg-doc-green/15 text-doc-green border border-doc-green/35'
+                                : 'bg-ink/5 text-ink/40 border border-ink/10'
                             }`}
                           >
-                            {sb.windowCloseDelta > 0 ? 'سبق الشباك: +10' : 'قفل على فاضي: -15'}
+                            {has && <CheckCircle2 size={10} />}
+                            {CARD_DEFINITIONS[doc].nameAr}
                           </span>
-                        )}
-                      </div>
-                    )}
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}

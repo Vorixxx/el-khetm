@@ -1,5 +1,5 @@
 // ========================
-// EL-KHETM — Player Bottom Seat (Highlights + Tampered Memory Warnings + Immunity + Stickers)
+// EL-KHETM — Player Bottom Secret File (4 Face-Down Slots)
 // ========================
 
 import React, { useEffect, useState } from 'react';
@@ -28,7 +28,6 @@ export const PlayerFile: React.FC = () => {
     setInteractionMode,
     startPeek,
     placeInSlot,
-    matchArchive,
     openModal,
   } = useGameStore();
 
@@ -83,35 +82,27 @@ export const PlayerFile: React.FC = () => {
       placeInSlot(socket, interactionMode.handCard.instanceId, slotIndex);
       return;
     }
-    if (interactionMode.type === 'match_archive') {
-      if (!hasCard) return;
-      matchArchive(socket, slotIndex);
-      return;
-    }
     if (interactionMode.type === 'pick_own_slot') {
       if (interactionMode.purpose === 'desk_swap' && !hasCard) return;
-      const { card, burnCardInstanceId } = interactionMode;
+      const { card } = interactionMode;
       setInteractionMode(null);
       openModal('target', {
         cardInstanceId: card.instanceId,
         cardType: card.cardType,
         ownSlotIndex: slotIndex,
-        burnCardInstanceId,
       });
     }
   };
 
   const promptText = interactionMode?.type === 'place_in_slot'
-    ? `🗂️ اضغط على خانة (١–٤) عشان تنزّل «${CARD_DEFINITIONS[interactionMode.handCard.cardType].nameAr}» سراً`
-    : interactionMode?.type === 'match_archive'
-    ? '🎯 اضغط على الخانة اللي فاكر فيها نفس كارت الأرشيف!'
+    ? `🗂️ اضغط على خانة (١–٤) عشان تحط «${CARD_DEFINITIONS[interactionMode.handCard.cardType].nameAr}» سراً في ملفك`
     : interactionMode?.type === 'pick_own_slot'
     ? `🔁 اختار الأول الخانة من ملفك اللي هتستخدمها في «${CARD_DEFINITIONS[interactionMode.card.cardType].nameAr}»`
     : null;
 
   return (
     <div className="relative w-full flex flex-col items-center gap-[clamp(2px,0.4dvh,5px)] px-2 py-[clamp(3px,0.6dvh,6px)] bg-[#EFE6D2]/92 rounded-2xl border-2 border-ink shadow-retro-sm">
-      {/* Compact Sticker tucked neatly above corner */}
+      {/* Compact Sticker */}
       <AnimatePresence>
         {mySticker && (
           <motion.div
@@ -120,7 +111,7 @@ export const PlayerFile: React.FC = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.4 }}
             transition={{ type: 'spring', stiffness: 420, damping: 20 }}
-            className="absolute -top-11 left-2 z-30 pointer-events-none bg-white border-2 border-ink rounded-xl shadow-retro-sm px-1.5 py-1 flex items-center gap-1.5"
+            className="absolute -top-12 right-2 z-30 pointer-events-none bg-white border-2 border-ink rounded-xl shadow-retro-sm px-1.5 py-1 flex items-center gap-1.5"
           >
             <img
               src={getStickerImage(mySticker.stickerId)}
@@ -187,20 +178,11 @@ export const PlayerFile: React.FC = () => {
             />
           </div>
           <span className="text-[11px] sm:text-xs text-ink font-black truncate">
-            ملف {myPlayer.name}
+            ملف {myPlayer.name} المقفول
           </span>
           <span className="text-[9.5px] font-cairo font-bold text-ink/60 bg-white/75 px-1.5 py-0 rounded-full border border-ink/20">
             {AVATAR_LABELS[myPlayer.avatarId as AvatarId]}
           </span>
-          {myPlayer.matchScore !== 0 && (
-            <span
-              className={`text-[9.5px] px-1.5 rounded-full font-black ${
-                myPlayer.matchScore > 0 ? 'bg-doc-green/15 text-doc-green' : 'bg-prank-red/15 text-prank-red'
-              }`}
-            >
-              جرد: {myPlayer.matchScore > 0 ? `+${myPlayer.matchScore}` : myPlayer.matchScore}
-            </span>
-          )}
         </div>
 
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -229,7 +211,7 @@ export const PlayerFile: React.FC = () => {
         </div>
       </div>
 
-      {/* Responsive 4-Card Dossier with Tampered & Highlight Indicators */}
+      {/* Larger 4-Card Secret Dossier */}
       <div className="flex items-center justify-center gap-[clamp(6px,2.2vw,14px)] w-full py-0.5">
         {myPlayer.dossierSlots.map((slot, idx) => {
           const singleMatch = activePeek?.targetPlayerId === myId && activePeek.slotIndex === idx;
@@ -247,17 +229,17 @@ export const PlayerFile: React.FC = () => {
           const isSlotSelectable = Boolean(
             (isPeekStart && slot.hasCard && !wasSeen) ||
               (isMyTurnAction && interactionMode?.type === 'place_in_slot') ||
-              (isMyTurnAction && interactionMode?.type === 'match_archive' && slot.hasCard) ||
               (isMyTurnAction &&
                 interactionMode?.type === 'pick_own_slot' &&
                 (interactionMode.purpose === 'wasta' ? true : slot.hasCard)),
           );
 
-          const slotSize = 'w-[clamp(52px,15.5vw,72px)] aspect-[3/4]';
+          const slotSize = 'w-[clamp(58px,16vw,84px)] aspect-[3/4]';
 
           return (
             <motion.div
               key={`my-slot-${idx}`}
+              data-flight-anchor={`slot-${myId}-${idx}`}
               animate={slotHighlight ? { scale: [1, 1.1, 1], rotate: [0, -4, 4, 0] } : {}}
               transition={{ duration: 0.45 }}
               className="flex flex-col items-center gap-0.5 relative"
@@ -280,7 +262,7 @@ export const PlayerFile: React.FC = () => {
                         className="absolute bottom-1 left-1 bg-defense-blue/90 text-white rounded-full p-0.5 border border-white z-20"
                         title="سبق وشفت أو نزّلت الكارت ده"
                       >
-                        <Eye size={9} />
+                        <Eye size={10} />
                       </span>
                     )}
                     {wasTampered && !isRevealed && (
@@ -288,12 +270,12 @@ export const PlayerFile: React.FC = () => {
                         className="absolute bottom-1 left-1 bg-wasta-gold text-ink rounded-full p-0.5 border border-ink z-20 animate-pulse"
                         title="الخانة دي اتبدلت من وراك!"
                       >
-                        <AlertTriangle size={9} />
+                        <AlertTriangle size={10} />
                       </span>
                     )}
                   </FlipCard>
                   {isSlotSelectable && (
-                    <span className="pointer-events-none absolute -top-2 right-0.5 bg-doc-green text-white text-[8.5px] font-cairo font-black px-1.5 rounded-full border border-ink animate-bounce z-30">
+                    <span className="pointer-events-none absolute -top-2 right-0.5 bg-doc-green text-white text-[9px] font-cairo font-black px-1.5 rounded-full border border-ink animate-bounce z-30">
                       اختار
                     </span>
                   )}
@@ -324,8 +306,8 @@ export const PlayerFile: React.FC = () => {
                       : 'border-ink/30 bg-white/50 cursor-default'
                   }`}
                 >
-                  <ShieldAlert size={13} className="text-ink/30 mb-0.5" />
-                  <span className="text-[9.5px] font-cairo font-bold text-ink/50">فاضية</span>
+                  <ShieldAlert size={14} className="text-ink/30 mb-0.5" />
+                  <span className="text-[10px] font-cairo font-bold text-ink/50">فاضية</span>
                 </button>
               )}
               <span className="text-[9.5px] font-cairo font-extrabold text-ink/75">

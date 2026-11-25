@@ -1,5 +1,5 @@
 // ========================
-// EL-KHETM (الختم) — Card Effects Engine (Fair Positional + Anti-Spam Edition)
+// EL-KHETM (الختم) — Simplified Card Effects Engine
 // ========================
 
 import {
@@ -31,7 +31,6 @@ export interface ServerPlayer {
   /** Closed 4-slot dossier on the table */
   dossierSlots: (Card | null)[];
   startPeeksRemaining: number;
-  matchScore: number;
   /** Memory map: targetPlayerId -> set of slot indices this player has seen/placed */
   seenSlotsByPlayer: Record<string, Set<number>>;
   /** Slots previously seen by this player that were tampered behind their back */
@@ -48,7 +47,6 @@ export interface ServerGameState {
   players: ServerPlayer[];
   currentTurnIndex: number;
   deck: Card[];
-  openMarket: (Card | null)[];
   discardPile: Card[];
   globalEffects: GlobalEffects;
   activeMedhatCard: Card | null;
@@ -151,14 +149,6 @@ export function drawCards(state: ServerGameState, player: ServerPlayer, count: n
   return drawn;
 }
 
-export function refillOpenMarket(state: ServerGameState): void {
-  for (let i = 0; i < GAME_CONSTANTS.OPEN_MARKET_SIZE; i++) {
-    if (!state.openMarket[i]) {
-      state.openMarket[i] = popDeckCard(state);
-    }
-  }
-}
-
 // === Action Log ===
 
 export function addLogEntry(state: ServerGameState, message: string): void {
@@ -182,30 +172,15 @@ export function validateCardPlay(
   targetPlayerId?: string,
   targetSlotIndex?: number,
   ownSlotIndex?: number,
-  burnCardInstanceId?: string,
 ): PlayValidation {
   const def = getCardDef(card.cardType);
 
   if (def.isReactionOnly) {
-    return { valid: false, error: 'الكارت ده بيتلعب كرد فعل بس' };
-  }
-
-  if (def.category === 'trap') {
-    return { valid: false, error: 'ورقة عقوبة! بدّلها لخصم بـ «تبديل مكاتب» أو احرقها كـ رسوم' };
+    return { valid: false, error: 'الكارت ده بيتلعب تلقائياً لما حد يضربك بمقلب!' };
   }
 
   if (isDocumentCard(card.cardType)) {
-    return { valid: false, error: 'حط المستند جوه خانة في ملفك' };
-  }
-
-  // Burn cost validation
-  if (def.burnCost > 0) {
-    if (!burnCardInstanceId || burnCardInstanceId === card.instanceId) {
-      return { valid: false, error: 'لازم تختار كارت تاني من إيدك تحرقه كـ رسوم' };
-    }
-    if (!caster.hand.some(c => c.instanceId === burnCardInstanceId)) {
-      return { valid: false, error: 'كارت الحرق مش في إيدك' };
-    }
+    return { valid: false, error: 'نزّل المستند جوه خانة في ملفك' };
   }
 
   // Fair positional validation
@@ -295,10 +270,6 @@ export function validateCardPlay(
 
   if (card.cardType === 'uncle_gamal' && state.discardPile.length === 0) {
     return { valid: false, error: 'الأرشيف فاضي' };
-  }
-
-  if (card.cardType === 'dossier_sort' && state.deck.length === 0) {
-    return { valid: false, error: 'كومة السحب فاضية' };
   }
 
   return { valid: true };
@@ -432,11 +403,9 @@ export function executeDeskSwap(
   caster.dossierSlots[casterSlotIndex] = targetCard;
   target.dossierSlots[targetSlotIndex] = casterCard;
 
-  // Mark tampered for anyone who had seen these slots (especially target losing their known slot!)
   clearSlotMemoryAcrossPlayers(state.players, caster.id, casterSlotIndex, true);
   clearSlotMemoryAcrossPlayers(state.players, target.id, targetSlotIndex, true);
 
-  // Restore caster's accurate memory of what they just swapped
   caster.tamperedSlotsByPlayer[caster.id]?.delete(casterSlotIndex);
   caster.tamperedSlotsByPlayer[target.id]?.delete(targetSlotIndex);
   if (casterKnownOfTarget) {

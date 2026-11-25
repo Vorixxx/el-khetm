@@ -10,7 +10,6 @@ import { getCardImage, getCardFallbackSvg, getCardBack, CARD_BACK_FALLBACK_CSS }
 
 const CATEGORY_BORDER: Record<string, string> = {
   document: 'border-doc-green',
-  trap: 'border-ink',
   prank: 'border-prank-red',
   utility: 'border-defense-blue',
 };
@@ -22,18 +21,19 @@ interface CardProps {
   isDimmed?: boolean;
   dimmedReason?: string;
   onTap?: () => void;
-  size?: 'xs' | 'sm' | 'md' | 'slot' | 'opp' | 'preview' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'hand' | 'slot' | 'opp' | 'preview' | 'lg';
   className?: string;
 }
 
 const SIZE_CLASSES: Record<NonNullable<CardProps['size']>, string> = {
-  xs: 'w-[clamp(34px,9.6vw,44px)]',
-  opp: 'w-[clamp(36px,10.5vw,50px)]',
-  sm: 'w-[clamp(52px,14.5vw,68px)]',
-  md: 'w-[clamp(48px,14vw,66px)]',
-  slot: 'w-[clamp(52px,15.5vw,74px)]',
-  preview: 'w-[clamp(90px,24vw,112px)]',
-  lg: 'w-[clamp(132px,38vw,176px)]',
+  xs: 'w-[clamp(38px,10vw,58px)]',
+  opp: 'w-[clamp(40px,10.5vw,58px)]',
+  sm: 'w-[clamp(74px,20.5vw,106px)]',
+  md: 'w-[clamp(78px,21vw,106px)]',
+  hand: 'w-[clamp(88px,24vw,116px)]',
+  slot: 'w-[clamp(58px,16vw,84px)]',
+  preview: 'w-[clamp(98px,25vw,132px)]',
+  lg: 'w-[clamp(140px,38vw,196px)]',
 };
 
 export const Card = React.memo<CardProps>(({

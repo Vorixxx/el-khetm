@@ -1,15 +1,10 @@
 // ========================
-// EL-KHETM — Player Hand Dock (Fanned Overlap Without Horizontal Scroll + Fair Validation)
+// EL-KHETM — Large Readable Player Hand Dock (Uncovered Giant Cards + Crisp Captions)
 // ========================
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Clock,
-  Crosshair,
-  DoorClosed,
-  Flame,
-} from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import { Card as CardComponent } from './Card';
@@ -17,7 +12,6 @@ import {
   CARD_DEFINITIONS,
   getCardPlayError,
   isDocumentCard,
-  GAME_CONSTANTS,
 } from '@el-khetm/shared';
 import type { Card, CardType } from '@el-khetm/shared';
 
@@ -29,7 +23,9 @@ const HandTurnTimer: React.FC<{ expiresAt: number | null }> = ({ expiresAt }) =>
       setTurnSecondsLeft(null);
       return;
     }
-    const tick = () => setTurnSecondsLeft(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
+    const tick = () => {
+      setTurnSecondsLeft(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
+    };
     tick();
     const id = setInterval(tick, 350);
     return () => clearInterval(id);
@@ -45,7 +41,7 @@ const HandTurnTimer: React.FC<{ expiresAt: number | null }> = ({ expiresAt }) =>
           : 'bg-white text-ink border-ink/30'
       }`}
     >
-      {turnSecondsLeft}ث
+      {turnSecondsLeft} ث
     </span>
   );
 };
@@ -56,17 +52,16 @@ export const PlayerHand: React.FC = () => {
     publicState,
     privateState,
     myPlayerId,
-    playCard,
     endTurn,
     openModal,
     setHoveredPreview,
     interactionMode,
-    setInteractionMode,
-    closeWindow,
   } = useGameStore();
 
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
-  const [confirmCloseWindow, setConfirmCloseWindow] = useState(false);
+  const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(() => new Set());
+  const seenHandIdsRef = useRef<Set<string> | null>(null);
+  const newCardTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const myId = privateState?.playerId || myPlayerId || '';
   const myPlayer = publicState?.players.find(p => p.id === myId) ?? null;
@@ -80,8 +75,62 @@ export const PlayerHand: React.FC = () => {
   const medhatActive = publicState?.globalEffects.medhatVacationUntilPlayerId !== null;
 
   useEffect(() => {
-    setConfirmCloseWindow(false);
-  }, [publicState?.phase, publicState?.currentTurnPlayerId]);
+    const currentIds = (privateState?.hand ?? []).map(c => c.instanceId);
+    if (!privateState || currentIds.length === 0) {
+      if (!privateState) {
+        seenHandIdsRef.current = null;
+      }
+      return;
+    }
+
+    const prevSeen = seenHandIdsRef.current;
+    if (
+      !prevSeen ||
+      (publicState?.phase === 'PEEK_START' &&
+        publicState?.roundNumber === 1 &&
+        currentIds.every(id => !prevSeen.has(id)))
+    ) {
+      seenHandIdsRef.current = new Set(currentIds);
+      return;
+    }
+
+    const added = currentIds.filter(id => !prevSeen.has(id));
+    for (const id of currentIds) {
+      prevSeen.add(id);
+    }
+
+    if (added.length > 0) {
+      setNewlyAddedIds(prev => {
+        const next = new Set(prev);
+        for (const id of added) next.add(id);
+        return next;
+      });
+      for (const id of added) {
+        const existingTimer = newCardTimersRef.current.get(id);
+        if (existingTimer) clearTimeout(existingTimer);
+        const timer = setTimeout(() => {
+          newCardTimersRef.current.delete(id);
+          setNewlyAddedIds(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }, 2400);
+        newCardTimersRef.current.set(id, timer);
+      }
+    }
+  }, [privateState, publicState?.phase, publicState?.roundNumber]);
+
+  useEffect(() => {
+    const timers = newCardTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
 
   const getPlayError = useCallback((cardType: CardType): string | null => {
     if (!publicState || !myPlayer || !privateState) return 'جاري التحميل...';
@@ -90,9 +139,7 @@ export const PlayerHand: React.FC = () => {
     if (!isMyTurn) return 'مش دورك دلوقتي';
     if (actionsLeft <= 0) return 'خلصت حركاتك';
 
-    const err = getCardPlayError(cardType, myPlayer.file, medhatActive, {
-      handCount: privateState.hand.length,
-    });
+    const err = getCardPlayError(cardType, myPlayer.file, medhatActive);
     if (err) return err;
 
     const def = CARD_DEFINITIONS[cardType];
@@ -116,7 +163,7 @@ export const PlayerHand: React.FC = () => {
         case 'file_lost':
         case 'wasta':
           if (!fairOpponents.some(p => p.dossierSlots.some(s => s.hasCard))) {
-            return 'مفيش خانة متاحة عند خصم غير محصّن';
+            return 'مفيش خانة عند خصم غير محصّن';
           }
           break;
         case 'desk_swap':
@@ -133,7 +180,6 @@ export const PlayerHand: React.FC = () => {
       return 'كل الخانات فاضية';
     }
     if (cardType === 'uncle_gamal' && publicState.discardPileCount === 0) return 'الأرشيف فاضي';
-    if (cardType === 'dossier_sort' && publicState.deckCount === 0) return 'كومة السحب فاضية';
 
     return null;
   }, [publicState, myPlayer, privateState, isMyTurn, isMyDraw, actionsLeft, medhatActive, myId]);
@@ -142,37 +188,12 @@ export const PlayerHand: React.FC = () => {
 
   const canPlaceCardInSlot = (card: Card): boolean => {
     if (!isMyTurn || actionsLeft <= 0) return false;
-    if (card.cardType === 'manager_sign' && medhatActive) {
-      return false;
-    }
+    if (!isDocumentCard(card.cardType)) return false;
+    if (card.cardType === 'manager_sign' && medhatActive) return false;
     return true;
   };
 
   const handleCardTap = (card: Card) => {
-    if (interactionMode?.type === 'burn_card') {
-      if (card.instanceId === interactionMode.card.instanceId) return;
-      const actionCard = interactionMode.card;
-      setInteractionMode(null);
-      const def = CARD_DEFINITIONS[actionCard.cardType];
-      if (actionCard.cardType === 'desk_swap' || actionCard.cardType === 'wasta') {
-        setInteractionMode({
-          type: 'pick_own_slot',
-          card: actionCard,
-          purpose: actionCard.cardType,
-          burnCardInstanceId: card.instanceId,
-        });
-      } else if (def.targetsOpponent || def.targetsAnySlot || actionCard.cardType === 'show_me_all') {
-        openModal('target', {
-          cardInstanceId: actionCard.instanceId,
-          cardType: actionCard.cardType,
-          burnCardInstanceId: card.instanceId,
-        });
-      } else {
-        playCard(socket, { cardInstanceId: actionCard.instanceId, burnCardInstanceId: card.instanceId });
-      }
-      return;
-    }
-
     setHoveredPreview(null);
     setHoveredCardId(null);
     openModal('card_zoom', { handCard: card });
@@ -181,183 +202,138 @@ export const PlayerHand: React.FC = () => {
   const currentTurnPlayerName =
     publicState.players.find(p => p.id === publicState.currentTurnPlayerId)?.name ?? '';
 
-  const canMatch =
-    isMyTurn && !publicState.matchedThisTurn && publicState.discardPileCount > 0 && myPlayer.filledSlotCount > 0;
-  const canCloseWindow =
-    isMyTurn &&
-    publicState.roundNumber >= GAME_CONSTANTS.MIN_ROUND_TO_CLOSE_WINDOW &&
-    publicState.windowClosedByPlayerId === null;
-
-  // Dynamic overlapping card fan margin so all 1-7 cards are visible simultaneously without horizontal scroll
-  const handCount = privateState.hand.length;
-  const overlapClass =
-    handCount <= 4
-      ? 'ml-1.5 first:ml-0'
-      : handCount === 5
-      ? '-ml-2 first:ml-0'
-      : handCount === 6
-      ? '-ml-3.5 first:ml-0'
-      : '-ml-5 first:ml-0';
-
   return (
-    <div className="w-full flex flex-col bg-manila/95 rounded-xl border-2 border-ink shadow-retro" dir="rtl">
-      {/* Turn Status + Quick Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1 bg-ink/5 border-b border-ink/15 rounded-t-lg">
+    <div className="w-full flex flex-col bg-manila/95 rounded-2xl border-2 border-ink shadow-retro" dir="rtl">
+      {/* Turn Status + End Turn Control */}
+      <div className="flex items-center justify-between gap-2 px-2.5 py-1 bg-ink/5 border-b border-ink/15 rounded-t-xl">
         <div className="flex items-center gap-1.5 min-w-0">
           {isMyTurn || isMyDraw ? (
             <>
-              <div className="w-2 h-2 rounded-full bg-doc-green animate-pulse flex-shrink-0" />
-              <span className="text-[10.5px] sm:text-xs font-cairo font-extrabold text-ink truncate">
-                {isMyDraw ? 'دورك: اسحب كارت' : `دورك — ${actionsLeft} حركة`}
+              <div className="w-2.5 h-2.5 rounded-full bg-doc-green animate-pulse flex-shrink-0" />
+              <span className="text-[11px] sm:text-xs font-cairo font-black text-ink truncate">
+                {isMyDraw ? 'دورك: اسحب كارت من الكومة' : `دورك — متاح ${actionsLeft} حركة`}
               </span>
               <HandTurnTimer expiresAt={publicState.turnExpiresAt} />
             </>
           ) : (
             <>
               <Clock size={12} className="text-ink/55 flex-shrink-0" />
-              <span className="text-[10.5px] font-cairo font-bold text-ink/75 truncate">
-                {publicState.phase === 'PEEK_START' ? 'نظرة البداية...' : `دور ${currentTurnPlayerName}`}
+              <span className="text-[11px] font-cairo font-bold text-ink/75 truncate">
+                {publicState.phase === 'PEEK_START' ? 'نظرة البداية — احفظ خانتين...' : `دور ${currentTurnPlayerName}`}
               </span>
             </>
           )}
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {canMatch && (
-            <button
-              onClick={() => setInteractionMode({ type: 'match_archive' })}
-              className="flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 bg-defense-blue text-white text-[10px] font-cairo font-black rounded-lg border border-ink shadow-retro-sm active:shadow-none"
-            >
-              <Crosshair size={10} />
-              <span>جرد</span>
-            </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {privateState.hand.length > 3 && (
+            <span className="text-[9.5px] font-cairo font-bold text-ink/60">
+              ({privateState.hand.length} كروت ↔)
+            </span>
           )}
-
-          {canCloseWindow && !confirmCloseWindow && (
-            <button
-              onClick={() => setConfirmCloseWindow(true)}
-              className="flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 bg-prank-red text-white text-[10px] font-cairo font-black rounded-lg border border-ink shadow-retro-sm"
-            >
-              <DoorClosed size={10} />
-              <span>قفل الشباك!</span>
-            </button>
-          )}
-
-          {canCloseWindow && confirmCloseWindow && (
-            <div className="flex items-center gap-1 bg-prank-red/15 px-1.5 py-0.5 rounded-lg border border-prank-red">
-              <button
-                onClick={() => {
-                  setConfirmCloseWindow(false);
-                  closeWindow(socket);
-                }}
-                className="px-1.5 py-0 bg-prank-red text-white text-[9.5px] font-cairo font-black rounded"
-              >
-                أكد القفل!
-              </button>
-              <button
-                onClick={() => setConfirmCloseWindow(false)}
-                className="px-1 py-0 bg-white text-ink text-[9.5px] font-cairo font-bold rounded border border-ink/30"
-              >
-                لأ
-              </button>
-            </div>
-          )}
-
           {isMyTurn && (
             <button
               onClick={() => {
                 setHoveredPreview(null);
                 endTurn(socket);
               }}
-              className="px-2 py-0.5 bg-ink text-white text-[10px] font-cairo font-bold rounded-lg border border-ink"
+              className="px-2.5 py-0.5 bg-ink text-white text-[10.5px] font-cairo font-black rounded-lg border border-ink shadow-sm"
             >
-              إنهاء
+              إنهاء الدور
             </button>
           )}
         </div>
       </div>
 
-      {/* Burn Cost Banner */}
-      <AnimatePresence>
-        {interactionMode?.type === 'burn_card' && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="flex items-center justify-between px-3 py-1 bg-prank-red text-white text-[10.5px] font-cairo font-black"
-          >
-            <span className="flex items-center gap-1 truncate">
-              <Flame size={12} />
-              اختار كارت تاني من إيدك تحرقه كـ رسوم لـ «{CARD_DEFINITIONS[interactionMode.card.cardType].nameAr}»
-            </span>
-            <button
-              onClick={() => setInteractionMode(null)}
-              className="bg-white text-ink px-2 py-0.5 rounded border border-ink text-[9.5px] flex-shrink-0"
-            >
-              إلغاء
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Giant Uncovered Scrollable Cards Tray (100% readable captions + big art!) */}
+      <div className="w-full overflow-x-auto overflow-y-hidden pt-4 pb-1.5 px-2.5" data-flight-anchor={`hand-${myId}`}>
+        <div className="w-max min-w-full flex items-end justify-center gap-2">
+          <AnimatePresence mode="popLayout">
+            {privateState.hand.map((card, i) => {
+              const def = CARD_DEFINITIONS[card.cardType];
+              const isDoc = isDocumentCard(card.cardType);
+              const error = isDoc ? (canPlaceCardInSlot(card) ? null : (medhatActive && card.cardType === 'manager_sign' ? 'مدحت في إجازة' : null)) : getPlayError(card.cardType);
+              const isSelected = interactionMode?.type === 'place_in_slot' && interactionMode.handCard.instanceId === card.instanceId;
+              const isNewlyAdded = newlyAddedIds.has(card.instanceId);
+              const isHovered = hoveredCardId === card.instanceId;
 
-      {/* Fanned Overlapping Hand Cards Tray (All 1-7 cards visible together!) */}
-      <div className="w-full overflow-visible pt-2 pb-1.5 px-2">
-        <div className="flex items-end justify-center w-full" dir="ltr">
-          {privateState.hand.map((card, i) => {
-            const isDoc = isDocumentCard(card.cardType);
-            const error = isDoc ? (canPlaceCardInSlot(card) ? null : 'مش متاح') : getPlayError(card.cardType);
-            const isBurnSource =
-              interactionMode?.type === 'burn_card' && interactionMode.card.instanceId === card.instanceId;
-            const isBurnCandidate =
-              interactionMode?.type === 'burn_card' && interactionMode.card.instanceId !== card.instanceId;
-            const isHovered = hoveredCardId === card.instanceId;
-            const fanDeg = (i - (handCount - 1) / 2) * (handCount > 5 ? 2.2 : 1.6);
+              const badgeColor =
+                def.category === 'document'
+                  ? 'bg-doc-green/12 text-doc-green border-doc-green/35'
+                  : def.category === 'prank'
+                  ? 'bg-prank-red/12 text-prank-red border-prank-red/35'
+                  : card.cardType === 'wasta'
+                  ? 'bg-wasta-gold/20 text-ink border-wasta-gold'
+                  : 'bg-defense-blue/12 text-defense-blue border-defense-blue/35';
 
-            return (
-              <motion.div
-                key={card.instanceId}
-                className={`flex-shrink-0 relative ${overlapClass}`}
-                animate={{
-                  rotate: isHovered || isBurnSource ? 0 : fanDeg,
-                  y: isHovered ? -12 : isBurnCandidate ? -6 : Math.abs(i - (handCount - 1) / 2) * 1.4,
-                  scale: isHovered ? 1.12 : 1,
-                }}
-                style={{ zIndex: isHovered ? 35 : isBurnSource ? 30 : i + 1 }}
-                transition={{ type: 'spring', stiffness: 360, damping: 24 }}
-                onPointerEnter={(e) => {
-                  if (e.pointerType === 'touch') return;
-                  setHoveredCardId(card.instanceId);
-                  setHoveredPreview({
-                    cardType: card.cardType,
-                    badgeText: isDoc ? 'مستند لملفك' : 'كارت في إيدك',
-                    statusText: isBurnCandidate
-                      ? '🔥 اضغط لحرق الكارت ده كـ رسوم'
-                      : error
-                      ? error
-                      : 'اضغط لمعاينة ولعب الكارت',
-                    isError: Boolean(error) && !isBurnCandidate,
-                  });
-                }}
-                onPointerLeave={(e) => {
-                  if (e.pointerType === 'touch') return;
-                  setHoveredCardId(prev => (prev === card.instanceId ? null : prev));
-                  setHoveredPreview(null);
-                }}
-              >
-                <CardComponent
-                  cardType={card.cardType}
-                  isSelected={isBurnSource}
-                  isDimmed={(Boolean(error) && isMyTurn && !isBurnCandidate) || isBurnSource}
-                  dimmedReason={isBurnSource ? 'المختار' : error || undefined}
-                  onTap={() => handleCardTap(card)}
-                  size="md"
-                  className={isBurnCandidate ? 'ring-2 ring-prank-red animate-pulse' : ''}
-                />
-              </motion.div>
-            );
-          })}
+              return (
+                <motion.div
+                  key={card.instanceId}
+                  layout="position"
+                  className="flex-shrink-0 relative flex flex-col items-center w-[clamp(88px,24vw,116px)]"
+                  initial={{ opacity: 0, y: -28, scale: 0.8 }}
+                  animate={{
+                    opacity: 1,
+                    y: isHovered ? -8 : isNewlyAdded ? -5 : 0,
+                    scale: isHovered ? 1.05 : 1,
+                  }}
+                  exit={{ opacity: 0, y: -18, scale: 0.72 }}
+                  style={{ zIndex: isHovered ? 35 : isNewlyAdded ? 25 : i + 1 }}
+                  transition={{ type: 'spring', stiffness: 360, damping: 24 }}
+                  onPointerEnter={(e) => {
+                    if (e.pointerType === 'touch') return;
+                    setHoveredCardId(card.instanceId);
+                    setHoveredPreview({
+                      cardType: card.cardType,
+                      badgeText: isDoc ? 'مستند لملفك' : 'كارت أكشن',
+                      statusText: error ?? def.shortEffectAr,
+                      isError: Boolean(error) && isMyTurn,
+                    });
+                  }}
+                  onPointerLeave={(e) => {
+                    if (e.pointerType === 'touch') return;
+                    setHoveredCardId(prev => (prev === card.instanceId ? null : prev));
+                    setHoveredPreview(null);
+                  }}
+                >
+                  {isNewlyAdded && !isSelected && (
+                    <span
+                      className="pointer-events-none absolute -top-3 right-1/2 translate-x-1/2 z-40 rounded-full bg-emerald-600 px-2 py-0.5 text-[9.5px] font-black font-cairo text-white shadow-md ring-1 ring-white whitespace-nowrap animate-bounce"
+                      dir="rtl"
+                    >
+                      جديد ✨
+                    </span>
+                  )}
+                  <CardComponent
+                    cardType={card.cardType}
+                    isSelected={isSelected}
+                    isDimmed={Boolean(error) && isMyTurn && !def.isReactionOnly}
+                    dimmedReason={error || undefined}
+                    onTap={() => handleCardTap(card)}
+                    size="hand"
+                    className={`!w-full ${
+                      isNewlyAdded ? 'ring-2 ring-emerald-500 shadow-[0_0_14px_rgba(16,185,129,0.55)]' : ''
+                    }`}
+                  />
+                  {/* Crisp High-Contrast Arabic Name & Action Label Below Each Card */}
+                  <button
+                    type="button"
+                    onClick={() => handleCardTap(card)}
+                    className={`w-full mt-1 rounded-lg border px-1 py-0.5 text-center leading-tight shadow-sm ${badgeColor} bg-white/95`}
+                  >
+                    <p className="text-[10px] sm:text-[11px] font-cairo font-black text-ink truncate">
+                      {def.nameAr}
+                    </p>
+                    <p className="text-[8.5px] sm:text-[9.5px] font-cairo font-bold truncate opacity-90">
+                      {def.shortEffectAr}
+                    </p>
+                  </button>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
           {privateState.hand.length === 0 && (
-            <span className="text-xs font-cairo font-bold text-ink/40 py-4" dir="rtl">إيدك فاضية</span>
+            <span className="text-xs font-cairo font-bold text-ink/50 py-5" dir="rtl">إيدك فاضية</span>
           )}
         </div>
       </div>

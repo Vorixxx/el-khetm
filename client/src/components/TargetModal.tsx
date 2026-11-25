@@ -18,7 +18,7 @@ export const TargetModal: React.FC = () => {
   const [multiSelections, setMultiSelections] = useState<Record<string, number>>({});
 
   const isOpen = activeModal === 'target';
-  const { cardInstanceId, cardType, ownSlotIndex, burnCardInstanceId } = modalData;
+  const { cardInstanceId, cardType, ownSlotIndex } = modalData;
   const myId = privateState?.playerId || myPlayerId || '';
   const isShowMeAll = cardType === 'show_me_all';
 
@@ -187,7 +187,6 @@ export const TargetModal: React.FC = () => {
                             cardInstanceId,
                             targetPlayerId: cand.id,
                             ownSlotIndex,
-                            burnCardInstanceId,
                           });
                           handleClose();
                         } else {
@@ -256,7 +255,6 @@ export const TargetModal: React.FC = () => {
                             targetPlayerId: targetPlayer.id,
                             targetSlotIndex: idx,
                             ownSlotIndex,
-                            burnCardInstanceId,
                           });
                           handleClose();
                         }}
