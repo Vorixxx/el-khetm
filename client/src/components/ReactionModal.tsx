@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
-import { CARD_DEFINITIONS, SLOT_LABELS_AR } from '@el-khetm/shared';
+import { getSafeCardDef, SLOT_LABELS_AR } from '@el-khetm/shared';
 import { Card as CardComponent } from './Card';
 
 export const ReactionModal: React.FC = () => {
@@ -43,7 +43,7 @@ export const ReactionModal: React.FC = () => {
     closeModal();
   };
 
-  const cardDef = reaction ? CARD_DEFINITIONS[reaction.cardPlayed.cardType] : null;
+  const cardDef = reaction ? getSafeCardDef(reaction.cardPlayed.cardType) : null;
   const slotLabel =
     reaction?.targetSlotIndex !== undefined ? SLOT_LABELS_AR[reaction.targetSlotIndex] : null;
 

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Archive } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
-import { CARD_DEFINITIONS } from '@el-khetm/shared';
+import { getSafeCardDef } from '@el-khetm/shared';
 import { Card as CardComponent } from './Card';
 
 export const ArchiveModal: React.FC = () => {
@@ -79,10 +79,10 @@ export const ArchiveModal: React.FC = () => {
               <div className="bg-white rounded-lg border border-ink/25 px-3 py-1.5 mb-2.5 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-cairo font-extrabold text-ink">
-                    {CARD_DEFINITIONS[selectedCard.cardType].nameAr}
+                    {getSafeCardDef(selectedCard.cardType).nameAr}
                   </p>
                   <p className="text-[11px] font-cairo text-ink/70">
-                    {CARD_DEFINITIONS[selectedCard.cardType].descriptionAr}
+                    {getSafeCardDef(selectedCard.cardType).descriptionAr}
                   </p>
                 </div>
               </div>
@@ -108,7 +108,7 @@ export const ArchiveModal: React.FC = () => {
               className="w-full mt-2 px-4 py-3 bg-defense-blue text-white font-cairo font-bold rounded-xl border-2 border-ink shadow-retro active:shadow-none disabled:opacity-40 transition-all"
             >
               {selectedCard
-                ? `اختار: ${CARD_DEFINITIONS[selectedCard.cardType].nameAr}`
+                ? `اختار: ${getSafeCardDef(selectedCard.cardType).nameAr}`
                 : 'اختار كارت من الأرشيف'}
             </button>
           </motion.div>

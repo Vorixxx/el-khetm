@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CARD_DEFINITIONS } from '@el-khetm/shared';
+import { getSafeCardDef } from '@el-khetm/shared';
 import { useGameStore } from '../store/useGameStore';
 import { Card as CardComponent } from './Card';
 
@@ -12,7 +12,7 @@ export const FloatingCardPreview: React.FC = () => {
   const { hoveredPreview, activeModal } = useGameStore();
 
   const isVisible = Boolean(hoveredPreview && !activeModal);
-  const def = hoveredPreview ? CARD_DEFINITIONS[hoveredPreview.cardType] : null;
+  const def = hoveredPreview ? getSafeCardDef(hoveredPreview.cardType) : null;
 
   return (
     <AnimatePresence>

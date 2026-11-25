@@ -15,7 +15,7 @@ import { FloatingCardPreview } from './FloatingCardPreview';
 import { CardFlightLayer } from './CardFlightLayer';
 import { Card as CardComponent } from './Card';
 import { BACKGROUNDS } from '../config/assets';
-import { CARD_DEFINITIONS } from '@el-khetm/shared';
+import { getSafeCardDef } from '@el-khetm/shared';
 import type { PublicPlayer } from '@el-khetm/shared';
 
 interface SeatAssignment {
@@ -342,7 +342,7 @@ const PeekSecretBanner: React.FC = () => {
                         {owner?.id === privateState?.playerId ? 'ملفك' : owner?.name} (خانة {item.slotIndex + 1})
                       </p>
                       <p className="text-wasta-gold font-black truncate">
-                        {CARD_DEFINITIONS[item.card.cardType].nameAr}
+                        {getSafeCardDef(item.card.cardType).nameAr}
                       </p>
                     </div>
                   </div>
@@ -357,7 +357,7 @@ const PeekSecretBanner: React.FC = () => {
 
   if (!activePeek) return null;
   const owner = publicState.players.find(p => p.id === activePeek.targetPlayerId);
-  const cardDef = CARD_DEFINITIONS[activePeek.card.cardType];
+  const cardDef = getSafeCardDef(activePeek.card.cardType);
 
   return (
     <AnimatePresence>

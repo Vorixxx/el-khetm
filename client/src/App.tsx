@@ -24,15 +24,16 @@ import { WifiOff } from 'lucide-react';
 
 class AppErrorBoundary extends React.Component<
   { children: React.ReactNode },
-  { hasError: boolean }
+  { hasError: boolean; errorMessage: string }
 > {
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, errorMessage: '' };
   }
 
-  static getDerivedStateFromError(): { hasError: boolean } {
-    return { hasError: true };
+  static getDerivedStateFromError(error: unknown): { hasError: boolean; errorMessage: string } {
+    const msg = error instanceof Error ? error.message : String(error ?? '');
+    return { hasError: true, errorMessage: msg };
   }
 
   override componentDidCatch(error: unknown) {
@@ -46,10 +47,18 @@ class AppErrorBoundary extends React.Component<
           <div className="bg-white border-2 border-ink rounded-2xl shadow-retro p-6 max-w-sm space-y-4">
             <h2 className="text-xl font-black text-prank-red">حصل عطل بسيط في الشاشة</h2>
             <p className="text-sm text-ink/75">اضغط الزرار عشان ترجع للصفحة الرئيسية وتكمل لعب.</p>
+            {this.state.errorMessage && (
+              <p className="text-[11px] font-mono bg-manila/80 border border-ink/20 rounded-lg p-2 text-ink/70 break-all" dir="ltr">
+                {this.state.errorMessage}
+              </p>
+            )}
             <button
               onClick={() => {
+                try {
+                  sessionStorage.removeItem('el-khetm-active-room');
+                } catch {}
                 useGameStore.getState().reset();
-                this.setState({ hasError: false });
+                this.setState({ hasError: false, errorMessage: '' });
               }}
               className="w-full py-3 bg-doc-green text-white font-bold rounded-xl border-2 border-ink shadow-retro"
             >

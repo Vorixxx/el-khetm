@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Hourglass, Sparkles } from 'lucide-react';
-import { CARD_DEFINITIONS } from '@el-khetm/shared';
+import { getSafeCardDef } from '@el-khetm/shared';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import { Card as CardComponent } from './Card';
@@ -141,13 +141,13 @@ export const TableCenter: React.FC = () => {
         <div className="flex flex-col items-center" data-flight-anchor="archive">
           {recentStack.length > 0 && discardPileTop ? (
             <div
-              className="relative w-[clamp(74px,20.5vw,106px)] aspect-[3/4] cursor-pointer"
+              className="relative w-[clamp(68px,19vw,104px)] aspect-[3/4] cursor-pointer"
               onPointerEnter={(e) => {
                 if (e.pointerType !== 'touch') {
                   setHoveredPreview({
                     cardType: discardPileTop.cardType,
                     badgeText: `الأرشيف (${discardPileCount})`,
-                    statusText: CARD_DEFINITIONS[discardPileTop.cardType].shortEffectAr,
+                    statusText: getSafeCardDef(discardPileTop.cardType).shortEffectAr,
                   });
                 }
               }}
@@ -184,7 +184,7 @@ export const TableCenter: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="w-[clamp(74px,20.5vw,106px)] aspect-[3/4] rounded-xl border-2 border-dashed border-ink/35 bg-manila/60 flex items-center justify-center p-2 text-center">
+            <div className="w-[clamp(68px,19vw,104px)] aspect-[3/4] rounded-xl border-2 border-dashed border-ink/35 bg-manila/60 flex items-center justify-center p-2 text-center">
               <span className="text-[11px] font-cairo font-bold text-ink/60">الأرشيف فاضي</span>
             </div>
           )}

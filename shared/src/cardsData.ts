@@ -163,7 +163,7 @@ export const CARD_DEFINITIONS: Record<CardType, CardDefinition> = {
   medhat_vacation: {
     cardType: 'medhat_vacation',
     category: 'prank',
-    nameAr: 'الأستاذ مدحت في إجازة',
+    nameAr: 'مدحت في إجازة',
     shortEffectAr: 'منع إمضاء المدير لفة',
     descriptionAr: 'لفة كاملة محدش يقدر ينزّل «إمضاء المدير» في ملفه!',
     color: '#B91C1C',
@@ -255,7 +255,7 @@ export const CARD_DEFINITIONS: Record<CardType, CardDefinition> = {
   show_me_all: {
     cardType: 'show_me_all',
     category: 'utility',
-    nameAr: 'وريني كده اللي معاك',
+    nameAr: 'وريني اللي معاك',
     shortEffectAr: 'اكشف خانة من كل لاعب',
     descriptionAr: 'اختار خانة من كل لاعب على الترابيزة (وملفك كمان) وشوفهم سراً مع بعض!',
     color: '#1D4ED8',
@@ -358,6 +358,30 @@ export function shuffleDeck<T>(arr: T[]): T[] {
 
 export function getCardDef(cardType: CardType): CardDefinition {
   return CARD_DEFINITIONS[cardType];
+}
+
+const UNKNOWN_CARD_DEF: CardDefinition = {
+  cardType: 'recommendation',
+  category: 'utility',
+  nameAr: 'ورقة مصلحة',
+  shortEffectAr: 'كارت غير متاح',
+  descriptionAr: 'الكارت ده من نسخة قديمة أو قيد التحديث.',
+  color: '#64748B',
+  quantity: 0,
+  positionalTarget: null,
+  triggersReaction: false,
+  targetsOpponent: false,
+  targetsSlot: false,
+  targetsOwnSlot: false,
+  targetsAnySlot: false,
+  isGlobal: false,
+  isReactionOnly: false,
+  isSelfTarget: false,
+};
+
+export function getSafeCardDef(cardType?: string | null): CardDefinition {
+  if (!cardType) return UNKNOWN_CARD_DEF;
+  return (CARD_DEFINITIONS as Record<string, CardDefinition>)[cardType] ?? UNKNOWN_CARD_DEF;
 }
 
 export function isDocumentCard(cardType: CardType): cardType is DocumentCardType {

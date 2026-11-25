@@ -1,5 +1,5 @@
 // ========================
-// EL-KHETM — Game Over Modal (4-Document Showdown, Zero Points)
+// EL-KHETM — Game Over Modal (4-Document Showdown, Pinned Action Footer)
 // ========================
 
 import React from 'react';
@@ -8,7 +8,7 @@ import { Clock, RotateCcw, Home, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import { getAvatarImage, getAvatarFallback, getCardImage } from '../config/assets';
-import { roundToClockTime, CARD_DEFINITIONS, CORE_DOCUMENTS } from '@el-khetm/shared';
+import { roundToClockTime, getSafeCardDef, CORE_DOCUMENTS } from '@el-khetm/shared';
 import type { AvatarId } from '@el-khetm/shared';
 
 export const GameOverModal: React.FC = () => {
@@ -52,7 +52,7 @@ export const GameOverModal: React.FC = () => {
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="w-full max-w-md bg-manila rounded-2xl border-2 border-ink shadow-retro-lg p-4 max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-md bg-manila rounded-2xl border-2 border-ink shadow-retro-lg p-3.5 max-h-[90dvh] flex flex-col overflow-hidden"
             initial={{ scale: 0.85, y: 30 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.85, y: 30 }}
@@ -60,33 +60,33 @@ export const GameOverModal: React.FC = () => {
             dir="rtl"
           >
             {/* Header Trophy */}
-            <div className="flex flex-col items-center text-center mb-3">
+            <div className="flex-shrink-0 flex flex-col items-center text-center mb-2.5">
               <div
-                className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
+                className={`w-11 h-11 rounded-full flex items-center justify-center mb-1.5 ${
                   isPerfect
                     ? 'bg-wasta-gold/25 border-2 border-wasta-gold'
                     : 'bg-ink/10 border-2 border-ink/30'
                 }`}
               >
                 {isPerfect ? (
-                  <Sparkles className="text-wasta-gold" size={28} />
+                  <Sparkles className="text-wasta-gold" size={24} />
                 ) : (
-                  <Clock className="text-ink/75" size={28} />
+                  <Clock className="text-ink/75" size={24} />
                 )}
               </div>
 
-              <h2 className="font-cairo font-black text-xl text-ink">
+              <h2 className="font-cairo font-black text-lg text-ink leading-tight">
                 {isPerfect
                   ? '🦅 الختم الكامل — ملف مكتمل!'
                   : '⏰ الساعة جت 2 الضهر — كشف الملفات!'}
               </h2>
-              <p className="font-cairo font-bold text-xs text-ink/75 mt-1">
+              <p className="font-cairo font-bold text-xs text-ink/75 mt-0.5">
                 الفائز: <span className="text-doc-green font-black">{winnerNames}</span> ({endClock})
               </p>
             </div>
 
-            {/* Players Revealed 4-Slot Showdown */}
-            <div className="space-y-2.5 mb-4">
+            {/* Scrollable Players Revealed 4-Slot Showdown */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-0.5 pb-1">
               {sortedPlayers.map((p, rank) => {
                 const fs = p.fileSummary;
                 const isWinner = publicState.winnerIds?.includes(p.id);
@@ -96,14 +96,14 @@ export const GameOverModal: React.FC = () => {
                 return (
                   <div
                     key={p.id}
-                    className={`rounded-xl border-2 p-2.5 bg-white ${
+                    className={`rounded-xl border-2 p-2 bg-white ${
                       isWinner ? 'border-wasta-gold ring-2 ring-wasta-gold/30' : 'border-ink/20'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-xs font-cairo font-black text-ink/60">#{rank + 1}</span>
-                        <div className="w-8 h-8 rounded-full overflow-hidden border border-ink bg-white flex-shrink-0">
+                        <div className="w-7 h-7 rounded-full overflow-hidden border border-ink bg-white flex-shrink-0">
                           <img
                             src={getAvatarImage(p.avatarId as AvatarId)}
                             alt={p.name}
@@ -111,12 +111,12 @@ export const GameOverModal: React.FC = () => {
                             onError={(e) => { (e.target as HTMLImageElement).src = getAvatarFallback(p.name); }}
                           />
                         </div>
-                        <span className="font-cairo font-black text-sm text-ink truncate">
+                        <span className="font-cairo font-black text-xs sm:text-sm text-ink truncate">
                           {p.name} {isWinner && '🏆'}
                         </span>
                       </div>
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-cairo font-black border ${
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-cairo font-black border ${
                           docCount === 4
                             ? 'bg-doc-green text-white border-ink'
                             : isWinner
@@ -129,34 +129,37 @@ export const GameOverModal: React.FC = () => {
                     </div>
 
                     {/* Revealed 4 Slots */}
-                    <div className="flex items-center gap-1.5 mb-2">
-                      {p.dossierSlots.map((slot, sIdx) => (
-                        <div
-                          key={sIdx}
-                          className="flex-1 flex flex-col items-center bg-manila/60 rounded-lg p-1 border border-ink/15"
-                        >
-                          {slot.revealedCard ? (
-                            <>
-                              <img
-                                src={getCardImage(slot.revealedCard.cardType)}
-                                alt={CARD_DEFINITIONS[slot.revealedCard.cardType].nameAr}
-                                className="w-11 h-15 rounded border border-ink object-cover"
-                              />
-                              <span className="text-[8.5px] font-cairo font-bold text-ink truncate w-full text-center mt-0.5">
-                                {CARD_DEFINITIONS[slot.revealedCard.cardType].nameAr}
-                              </span>
-                            </>
-                          ) : (
-                            <div className="w-11 h-15 rounded border border-dashed border-ink/30 flex items-center justify-center text-[9px] text-ink/45">
-                              فاضي
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                    <div className="flex items-center gap-1 mb-1.5">
+                      {p.dossierSlots.map((slot, sIdx) => {
+                        const revealedDef = slot.revealedCard ? getSafeCardDef(slot.revealedCard.cardType) : null;
+                        return (
+                          <div
+                            key={sIdx}
+                            className="flex-1 flex flex-col items-center bg-manila/60 rounded-lg p-1 border border-ink/15"
+                          >
+                            {slot.revealedCard && revealedDef ? (
+                              <>
+                                <img
+                                  src={getCardImage(slot.revealedCard.cardType)}
+                                  alt={revealedDef.nameAr}
+                                  className="w-10 aspect-[3/4] rounded border border-ink object-cover"
+                                />
+                                <span className="text-[8px] font-cairo font-bold text-ink truncate w-full text-center mt-0.5">
+                                  {revealedDef.nameAr}
+                                </span>
+                              </>
+                            ) : (
+                              <div className="w-10 aspect-[3/4] rounded border border-dashed border-ink/30 flex items-center justify-center text-[9px] text-ink/45">
+                                فاضي
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Checklist of the 4 Official Documents */}
-                    <div className="flex flex-wrap gap-1 text-[9.5px] font-cairo font-bold">
+                    <div className="flex flex-wrap gap-1 text-[9px] font-cairo font-bold">
                       {CORE_DOCUMENTS.map(doc => {
                         const has = docsCollected.includes(doc);
                         return (
@@ -168,8 +171,8 @@ export const GameOverModal: React.FC = () => {
                                 : 'bg-ink/5 text-ink/40 border border-ink/10'
                             }`}
                           >
-                            {has && <CheckCircle2 size={10} />}
-                            {CARD_DEFINITIONS[doc].nameAr}
+                            {has && <CheckCircle2 size={9} />}
+                            {getSafeCardDef(doc).nameAr}
                           </span>
                         );
                       })}
@@ -179,20 +182,21 @@ export const GameOverModal: React.FC = () => {
               })}
             </div>
 
-            <div className="flex flex-col gap-2">
+            {/* Pinned Bottom Action Buttons (Always visible without scrolling) */}
+            <div className="flex-shrink-0 flex gap-2 pt-2.5 mt-1 border-t border-ink/15">
               <button
                 onClick={handlePlayAgain}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-doc-green text-white font-cairo font-bold rounded-xl border-2 border-ink shadow-retro active:shadow-none"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-doc-green text-white text-sm font-cairo font-bold rounded-xl border-2 border-ink shadow-retro active:shadow-none"
               >
-                <RotateCcw size={18} />
+                <RotateCcw size={17} />
                 جيم تاني
               </button>
               <button
                 onClick={handleGoHome}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-ink font-cairo font-bold rounded-xl border-2 border-ink/40"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white text-ink text-sm font-cairo font-bold rounded-xl border-2 border-ink/40"
               >
-                <Home size={18} />
-                الرجوع للرئيسية
+                <Home size={17} />
+                الرئيسية
               </button>
             </div>
           </motion.div>

@@ -4,10 +4,10 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HelpCircle, Volume2, VolumeX, ScrollText, LogOut, X } from 'lucide-react';
+import { HelpCircle, Volume2, VolumeX, ScrollText, LogOut, X, Clock } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
-import { roundToClockTime, roundToClockProgress, CARD_DEFINITIONS } from '@el-khetm/shared';
+import { roundToClockTime, roundToClockProgress, getSafeCardDef } from '@el-khetm/shared';
 import { getCardImage } from '../config/assets';
 
 export const TopBarHUD: React.FC = () => {
@@ -38,8 +38,8 @@ export const TopBarHUD: React.FC = () => {
                 strokeLinecap="round"
               />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-[7.5px] font-cairo font-black text-ink" dir="ltr">
-              {clockTime}
+            <span className="absolute inset-0 flex items-center justify-center text-ink">
+              <Clock size={14} className={progress > 0.75 ? 'text-prank-red' : 'text-ink'} />
             </span>
           </div>
           <div className="flex flex-col leading-tight">
@@ -122,30 +122,33 @@ export const TopBarHUD: React.FC = () => {
                 {events.length === 0 ? (
                   <p className="text-center text-sm font-cairo text-ink/50 py-6">لسه مفيش حركات في الجيم</p>
                 ) : (
-                  events.map(ev => (
-                    <div
-                      key={ev.id}
-                      className={`flex items-start gap-2.5 p-2.5 rounded-xl border-2 bg-white ${
-                        ev.blocked
-                          ? 'border-defense-blue'
-                          : ev.cardType && CARD_DEFINITIONS[ev.cardType].category === 'prank'
-                          ? 'border-prank-red/60'
-                          : 'border-doc-green/60'
-                      }`}
-                    >
-                      {ev.cardType && (
-                        <img
-                          src={getCardImage(ev.cardType)}
-                          alt={CARD_DEFINITIONS[ev.cardType].nameAr}
-                          className="w-10 h-14 rounded border border-ink object-cover flex-shrink-0"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-cairo font-extrabold text-xs text-ink">{ev.headlineAr}</p>
-                        <p className="font-cairo text-[11px] text-ink/75 mt-0.5 leading-relaxed">{ev.explanationAr}</p>
+                  events.map(ev => {
+                    const evDef = ev.cardType ? getSafeCardDef(ev.cardType) : null;
+                    return (
+                      <div
+                        key={ev.id}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border-2 bg-white ${
+                          ev.blocked
+                            ? 'border-defense-blue'
+                            : evDef?.category === 'prank'
+                            ? 'border-prank-red/60'
+                            : 'border-doc-green/60'
+                        }`}
+                      >
+                        {ev.cardType && evDef && evDef.quantity > 0 && (
+                          <img
+                            src={getCardImage(ev.cardType)}
+                            alt={evDef.nameAr}
+                            className="w-10 h-14 rounded border border-ink object-cover flex-shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-cairo font-extrabold text-xs text-ink">{ev.headlineAr}</p>
+                          <p className="font-cairo text-[11px] text-ink/75 mt-0.5 leading-relaxed">{ev.explanationAr}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </motion.div>

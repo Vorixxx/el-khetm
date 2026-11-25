@@ -5,7 +5,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-import { CARD_DEFINITIONS, getCardPlayError, isDocumentCard } from '@el-khetm/shared';
+import { getSafeCardDef, getCardPlayError, isDocumentCard } from '@el-khetm/shared';
 import type { Card, CardType } from '@el-khetm/shared';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
@@ -28,7 +28,7 @@ export const CardZoomModal: React.FC = () => {
   const isOpen = activeModal === 'card_zoom';
   const handCard: Card | null = modalData.handCard ?? null;
   const cardType: CardType | undefined = handCard?.cardType ?? (modalData.cardType as CardType | undefined);
-  const def = cardType ? CARD_DEFINITIONS[cardType] : null;
+  const def = cardType ? getSafeCardDef(cardType) : null;
 
   if (!isOpen || !cardType || !def) {
     return <AnimatePresence>{null}</AnimatePresence>;

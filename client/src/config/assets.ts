@@ -78,7 +78,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export function getCardImage(cardType: CardType): string {
-  return CARD_IMAGES[cardType];
+  return CARD_IMAGES[cardType] || getCardFallbackSvg(cardType, String(cardType), 'utility');
 }
 
 export function getCardFallbackSvg(_cardType: CardType, nameAr: string, category: string): string {

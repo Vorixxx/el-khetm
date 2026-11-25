@@ -8,7 +8,7 @@ import { Snowflake, MessageSquare, Eye, ShieldAlert, Shield, AlertTriangle } fro
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import {
-  CARD_DEFINITIONS,
+  getSafeCardDef,
   MEME_STICKERS,
   SLOT_LABELS_AR,
   AVATAR_LABELS,
@@ -95,9 +95,9 @@ export const PlayerFile: React.FC = () => {
   };
 
   const promptText = interactionMode?.type === 'place_in_slot'
-    ? `🗂️ اضغط على خانة (١–٤) عشان تحط «${CARD_DEFINITIONS[interactionMode.handCard.cardType].nameAr}» سراً في ملفك`
+    ? `🗂️ اضغط على خانة (١–٤) عشان تحط «${getSafeCardDef(interactionMode.handCard.cardType).nameAr}» سراً في ملفك`
     : interactionMode?.type === 'pick_own_slot'
-    ? `🔁 اختار الأول الخانة من ملفك اللي هتستخدمها في «${CARD_DEFINITIONS[interactionMode.card.cardType].nameAr}»`
+    ? `🔁 اختار الأول الخانة من ملفك اللي هتستخدمها في «${getSafeCardDef(interactionMode.card.cardType).nameAr}»`
     : null;
 
   return (

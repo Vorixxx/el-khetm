@@ -9,7 +9,7 @@ import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
 import { Card as CardComponent } from './Card';
 import {
-  CARD_DEFINITIONS,
+  getSafeCardDef,
   getCardPlayError,
   isDocumentCard,
 } from '@el-khetm/shared';
@@ -142,7 +142,7 @@ export const PlayerHand: React.FC = () => {
     const err = getCardPlayError(cardType, myPlayer.file, medhatActive);
     if (err) return err;
 
-    const def = CARD_DEFINITIONS[cardType];
+    const def = getSafeCardDef(cardType);
     const myIndex = publicState.players.findIndex(p => p.id === myId);
     const nextPlayer = myIndex >= 0 ? publicState.players[(myIndex + 1) % publicState.players.length] : null;
     const prevPlayer = myIndex >= 0 ? publicState.players[(myIndex - 1 + publicState.players.length) % publicState.players.length] : null;
@@ -248,9 +248,9 @@ export const PlayerHand: React.FC = () => {
       {/* Giant Uncovered Scrollable Cards Tray (100% readable captions + big art!) */}
       <div className="w-full overflow-x-auto overflow-y-hidden pt-4 pb-1.5 px-2.5" data-flight-anchor={`hand-${myId}`}>
         <div className="w-max min-w-full flex items-end justify-center gap-2">
-          <AnimatePresence mode="popLayout">
+          <AnimatePresence>
             {privateState.hand.map((card, i) => {
-              const def = CARD_DEFINITIONS[card.cardType];
+              const def = getSafeCardDef(card.cardType);
               const isDoc = isDocumentCard(card.cardType);
               const error = isDoc ? (canPlaceCardInSlot(card) ? null : (medhatActive && card.cardType === 'manager_sign' ? 'مدحت في إجازة' : null)) : getPlayError(card.cardType);
               const isSelected = interactionMode?.type === 'place_in_slot' && interactionMode.handCard.instanceId === card.instanceId;
@@ -269,7 +269,6 @@ export const PlayerHand: React.FC = () => {
               return (
                 <motion.div
                   key={card.instanceId}
-                  layout="position"
                   className="flex-shrink-0 relative flex flex-col items-center w-[clamp(88px,24vw,116px)]"
                   initial={{ opacity: 0, y: -28, scale: 0.8 }}
                   animate={{

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Eye, Shield } from 'lucide-react';
 import { useGameStore } from '../store/useGameStore';
 import { useSocket } from '../hooks/useSocket';
-import { CARD_DEFINITIONS, SLOT_LABELS_AR } from '@el-khetm/shared';
+import { getSafeCardDef, SLOT_LABELS_AR } from '@el-khetm/shared';
 import type { AvatarId, CardType } from '@el-khetm/shared';
 import { getAvatarImage, getAvatarFallback, getCardBack } from '../config/assets';
 
@@ -39,7 +39,7 @@ export const TargetModal: React.FC = () => {
     }
   }, [isOpen, cardInstanceId, isShowMeAll]);
 
-  const def = cardType ? CARD_DEFINITIONS[cardType as CardType] : null;
+  const def = cardType ? getSafeCardDef(cardType) : null;
   const canRender = Boolean(isOpen && publicState && cardInstanceId && cardType && def);
 
   const needsSlot = Boolean(def && (def.targetsSlot || def.targetsAnySlot));

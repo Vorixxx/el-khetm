@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { CardType } from '@el-khetm/shared';
-import { CARD_DEFINITIONS } from '@el-khetm/shared';
+import { getSafeCardDef } from '@el-khetm/shared';
 import { getCardImage, getCardFallbackSvg, getCardBack, CARD_BACK_FALLBACK_CSS } from '../config/assets';
 
 const CATEGORY_BORDER: Record<string, string> = {
@@ -28,7 +28,7 @@ interface CardProps {
 const SIZE_CLASSES: Record<NonNullable<CardProps['size']>, string> = {
   xs: 'w-[clamp(38px,10vw,58px)]',
   opp: 'w-[clamp(40px,10.5vw,58px)]',
-  sm: 'w-[clamp(74px,20.5vw,106px)]',
+  sm: 'w-[clamp(68px,19vw,104px)]',
   md: 'w-[clamp(78px,21vw,106px)]',
   hand: 'w-[clamp(88px,24vw,116px)]',
   slot: 'w-[clamp(58px,16vw,84px)]',
@@ -47,8 +47,8 @@ export const Card = React.memo<CardProps>(({
   className = '',
 }) => {
   const [imgError, setImgError] = useState(false);
-  const def = CARD_DEFINITIONS[cardType];
-  const borderColor = def ? CATEGORY_BORDER[def.category] : 'border-ink';
+  const def = getSafeCardDef(cardType);
+  const borderColor = CATEGORY_BORDER[def.category] || 'border-ink';
 
   if (isBack) {
     return (
@@ -141,7 +141,7 @@ export const FlipCard: React.FC<FlipCardProps> = ({
   children,
 }) => {
   const [imgErr, setImgErr] = useState(false);
-  const def = cardType ? CARD_DEFINITIONS[cardType] : null;
+  const def = cardType ? getSafeCardDef(cardType) : null;
   const frontSrc = cardType && def
     ? (imgErr ? getCardFallbackSvg(cardType, def.nameAr, def.category) : getCardImage(cardType))
     : '';
