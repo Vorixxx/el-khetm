@@ -44,7 +44,10 @@ function getExplicitServerUrl(): string | null {
     // Ignore malformed query parameter
   }
   const envUrl = import.meta.env.VITE_SERVER_URL;
-  return envUrl ? String(envUrl).trim() : null;
+  if (!envUrl) return null;
+  const trimmed = String(envUrl).trim().replace(/\/+$/, '');
+  if (!trimmed) return null;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
 function getServerUrl(): string {
